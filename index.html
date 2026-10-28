@@ -53,12 +53,16 @@
     <div class="trip-view" id="tripView" hidden>
       <header class="hero" id="hero"></header>
 
+      <div class="view-tabs" id="viewTabs" role="tablist" aria-label="มุมมอง"></div>
+
       <section class="summary" id="summary" aria-label="สรุปค่าใช้จ่าย"></section>
 
       <section class="card share" id="share" aria-label="สัดส่วนค่าใช้จ่าย"></section>
 
       <div class="cols">
-        <section class="card list-card" aria-label="รายการค่าใช้จ่าย">
+        <div class="view-main">
+        <div class="plan" id="planView"></div>
+        <section class="card list-card" id="costList" aria-label="รายการค่าใช้จ่าย">
           <div class="list-head">
             <h2>รายการทั้งหมด</h2>
             <div class="tabs" id="tabs" role="tablist" aria-label="กรองตามหมวด"></div>
@@ -66,6 +70,7 @@
           <div id="itemList"></div>
           <div class="list-foot" id="listFoot"></div>
         </section>
+        </div>
 
         <section class="card form-card" id="itemFormCard" aria-labelledby="itemFormTitle">
           <form id="itemForm" novalidate>
@@ -83,6 +88,10 @@
               <input type="date" name="date">
             </label>
             <div class="row2">
+              <label class="field grow1">เวลาเริ่ม <input type="time" name="timeStart"></label>
+              <label class="field grow1">ถึง <input type="time" name="timeEnd"></label>
+            </div>
+            <div class="row2">
               <label class="field grow3">ราคา (บาท)
                 <input type="number" name="price" min="0" step="any" inputmode="decimal" placeholder="0">
               </label>
@@ -90,9 +99,26 @@
                 <input type="number" name="qty" min="1" step="1" inputmode="numeric" value="1">
               </label>
             </div>
-            <label class="field">หมายเหตุ
+            <label class="field">รายละเอียด / หมายเหตุ
               <textarea name="note" rows="2" maxlength="1000"></textarea>
             </label>
+            <details class="more" id="moreFields">
+              <summary>ข้อมูลสำหรับแผนรายวัน <span class="muted small">การเดินทาง ที่อยู่ เวลาเปิด โทร</span></summary>
+              <div class="more-body">
+                <label class="field">การเดินทางมาจุดนี้
+                  <input type="text" name="travel" maxlength="200" placeholder="เช่น รถ 30–60 นาที (~15–20 กม.)">
+                </label>
+                <label class="field">ที่อยู่
+                  <textarea name="address" rows="2" maxlength="500"></textarea>
+                </label>
+                <label class="field"><span id="hoursLabel">เวลาเปิด–ปิด</span>
+                  <input type="text" name="hours" maxlength="200">
+                </label>
+                <label class="field">เบอร์โทร
+                  <input type="tel" name="phone" maxlength="40" inputmode="tel">
+                </label>
+              </div>
+            </details>
             <div class="field">
               <label for="mapInput">ลิงก์แผนที่ (Google Maps)</label>
               <div class="map-row">
@@ -162,6 +188,25 @@
     <div class="dialog-foot">
       <button type="button" class="btn-secondary" data-act="close-trip-dialog">ยกเลิก</button>
       <button type="submit" class="btn-primary" id="tripSubmit">บันทึกทริป</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dayDialog" class="dialog" aria-labelledby="dayDialogTitle">
+  <form id="dayForm" novalidate>
+    <div class="dialog-head">
+      <h2 id="dayDialogTitle">ข้อมูลวัน</h2>
+      <button type="button" class="icon-btn" data-act="close-day-dialog" aria-label="ปิด"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <label class="field">คำโปรยของวันนี้
+      <input type="text" name="tagline" maxlength="200" placeholder="เช่น เที่ยวแบบสบาย ๆ แวะจุดสวยไม่เยอะ แต่ครบทั้งคาเฟ่ วิวภูเขา">
+    </label>
+    <label class="field">เคล็ดลับ / สิ่งที่ต้องเตรียม (บรรทัดละ 1 ข้อ)
+      <textarea name="tips" rows="6" maxlength="3000" placeholder="เตรียมเสื้อกันหนาว&#10;ตรวจสอบเวลาเปิด–ปิดอีกครั้งใกล้วันเดินทาง"></textarea>
+    </label>
+    <div class="dialog-foot">
+      <button type="button" class="btn-secondary" data-act="close-day-dialog">ยกเลิก</button>
+      <button type="submit" class="btn-primary">บันทึก</button>
     </div>
   </form>
 </dialog>
