@@ -134,7 +134,8 @@ h1,h2{margin:0}
 /* form */
 .form-card{flex:1 1 300px;min-width:0;padding:18px}
 .form-card form,.dialog form{display:flex;flex-direction:column;gap:14px}
-.form-title{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.form-title{display:flex;align-items:center;gap:8px}
+.form-title h2{margin-right:auto}
 .form-title h2{font-size:17px}
 .badge-edit{font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;background:#FFF3D6;color:#7A5200}
 .pills{display:flex;flex-wrap:wrap;gap:8px}
@@ -204,3 +205,99 @@ h1,h2{margin:0}
   .total-card .big{font-size:30px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ===== desktop: ซ่อนส่วนที่ใช้เฉพาะมือถือ ===== */
+.topbar,.mobile-only,.scrim{display:none}
+.cat-grid{display:contents}
+
+/* ===== มือถือ ===== */
+@media (max-width:760px){
+  body{padding-bottom:calc(88px + env(safe-area-inset-bottom))}
+  body.drawer-open,body.sheet-open{overflow:hidden}
+  .mobile-only{display:inline-flex}
+  .mobile-only[hidden]{display:none!important}
+  .sheet-grab.mobile-only{display:block}
+
+  /* แถบบน */
+  .topbar{display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:30;padding:8px 12px;padding-top:calc(8px + env(safe-area-inset-top));background:rgba(246,244,239,.94);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--line)}
+  .top-trip{flex:1 1 auto;min-width:0;min-height:44px;display:flex;align-items:center;gap:8px;padding:6px 10px;border:none;border-radius:10px;background:transparent;font-weight:700;font-size:17px;cursor:pointer;text-align:left}
+  .top-trip:active{background:#ECE8DF}
+  .top-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .top-sync{flex:0 0 auto;width:44px;height:44px;display:flex;align-items:center;justify-content:center;padding:0}
+  .top-sync .dot{width:10px;height:10px}
+
+  .app{padding:12px 12px 0;gap:14px;display:block}
+  .main{gap:14px}
+  .trip-view{gap:14px}
+
+  /* เมนูทริปเลื่อนจากซ้าย */
+  .scrim{display:block;position:fixed;inset:0;z-index:40;background:rgba(20,24,32,.45)}
+  .scrim[hidden]{display:none}
+  .side{position:fixed;z-index:45;top:0;left:0;bottom:0;width:min(330px,88vw);max-width:none;background:var(--bg);padding:16px 14px;padding-top:calc(16px + env(safe-area-inset-top));overflow-y:auto;overscroll-behavior:contain;transform:translateX(-105%);visibility:hidden;transition:transform .22s ease,visibility 0s .22s;box-shadow:8px 0 30px rgba(0,0,0,.15)}
+  body.drawer-open .side{transform:none;visibility:visible;transition:transform .22s ease}
+  .brand{padding:0}
+  .drawer-close{margin-left:auto}
+
+  /* หัวทริป */
+  .hero{min-height:200px;border-radius:16px}
+  .hero-in{padding:12px 14px 16px;gap:16px}
+  .hero-actions{gap:6px}
+  .hero-actions .lbl{display:none}
+  .btn-glass{width:40px;height:40px;padding:0;justify-content:center}
+  .hero h1{font-size:26px}
+  .hero-dest{font-size:13px}
+  .hero-meta{font-size:13px;gap:4px 14px}
+  .hero-pattern{width:360px;height:210px;right:-70px}
+
+  /* สรุป */
+  .summary{display:flex;flex-direction:column;gap:10px}
+  .total-card{padding:16px 18px;border-radius:14px}
+  .total-card .big{font-size:30px}
+  .cat-grid{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -12px;padding:0 12px 2px;scrollbar-width:none}
+  .cat-grid::-webkit-scrollbar{display:none}
+  .cat-card{flex:0 0 138px;scroll-snap-align:start;padding:12px 14px;border-radius:14px}
+  .cat-card .amt{font-size:18px}
+  .share{padding:14px 16px;border-radius:14px}
+
+  /* รายการ */
+  .list-card{border-radius:14px}
+  .list-head{flex-direction:column;align-items:stretch;padding:14px 0 10px}
+  .list-head h2{padding:0 16px}
+  .tabs{flex-wrap:nowrap;overflow-x:auto;padding:0 16px 2px;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto}
+  .item{display:grid;grid-template-columns:40px minmax(0,1fr) auto;grid-template-areas:"date body price" "date body actions";gap:2px 10px;padding:12px 10px 12px 12px;align-items:start;flex-wrap:nowrap}
+  .item-date{grid-area:date;flex:none;padding-top:2px}
+  .item-date b{font-size:17px}
+  .item-body{grid-area:body;flex-basis:auto}
+  .item-price{grid-area:price;margin:0;align-items:flex-end;flex:none}
+  .item-actions{grid-area:actions;justify-content:flex-end;align-self:end}
+  .item-actions .icon-btn{width:40px;height:40px}
+  .thumb-btn{width:56px;height:56px}
+  .list-foot{padding:12px 16px}
+
+  /* ฟอร์มเพิ่มรายการ = แผ่นเลื่อนขึ้นจากล่าง */
+  .form-card{position:fixed;z-index:45;left:0;right:0;bottom:0;max-height:92vh;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain;border-radius:20px 20px 0 0;border:none;padding:6px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(0,0,0,.18);transform:translateY(105%);visibility:hidden;transition:transform .25s ease,visibility 0s .25s}
+  body.sheet-open .form-card{transform:none;visibility:visible;transition:transform .25s ease}
+  .sheet-grab{width:40px;height:5px;border-radius:999px;background:#D6D0C4;margin:4px auto 2px}
+  .form-title{position:sticky;top:-6px;z-index:1;background:#fff;padding:8px 0}
+  .sheet-close{width:40px;height:40px}
+  .form-card #itemSubmit{position:sticky;bottom:0;box-shadow:0 -8px 12px #fff}
+
+  /* ปุ่มลอย */
+  .fab{position:fixed;z-index:35;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));min-height:52px;padding:0 20px 0 16px;border:none;border-radius:999px;background:var(--ink);color:#fff;font-weight:700;font-size:15px;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(27,36,48,.35);cursor:pointer}
+  body.sheet-open .fab,body.drawer-open .fab{display:none}
+
+  /* ช่องกรอก 16px กัน iOS ซูม */
+  .field input,.field textarea{font-size:16px;min-height:44px}
+  .pill{flex:1 1 calc(33% - 8px);font-size:14px}
+
+  /* ฟอร์มทริป = แผ่นล่างเต็มกว้าง */
+  .dialog{width:100%;max-width:100%;margin:auto 0 0;max-height:94vh;max-height:94dvh;border-radius:20px 20px 0 0}
+  .dialog form{padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+  .dialog-foot .btn-primary{flex:1 1 auto}
+
+  .toast{bottom:calc(84px + env(safe-area-inset-bottom))}
+  .empty-app{padding:40px 16px}
+}
+@media (max-width:760px) and (prefers-reduced-motion:reduce){.side,.form-card{transition:none!important}}

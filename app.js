@@ -63,6 +63,10 @@
     img: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/></svg>',
     cal: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>',
     clock: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    zoom: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5M11 8.5v5M8.5 11h5"/></svg>',
+    imgOff: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M4 4l16 16"/></svg>',
+    trashS: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+    penS: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>',
     people: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.6 2.6 3 5.2"/></svg>'
   };
 
@@ -184,6 +188,7 @@
       err: ['err', 'เชื่อมต่อไม่ได้ ข้อมูลที่แก้อาจยังไม่ถูกบันทึก']
     }[kind];
     var s = $('#sync'); s.className = 'sync ' + m[0]; s.lastChild.textContent = m[1];
+    var ts = $('#topSync'); ts.className = 'top-sync sync ' + m[0]; ts.setAttribute('aria-label', m[1]); ts.title = m[1];
   }
   function onWriteErr() { setSync('err'); toast('บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'); }
 
@@ -239,6 +244,33 @@
     render();
   }
 
+  /* ===== มือถือ: เมนูทริป (drawer) และฟอร์มแบบแผ่นล่าง (sheet) ===== */
+  var mq = window.matchMedia('(max-width: 760px)');
+  function isMobile() { return mq.matches; }
+  var lastFocus = null;
+  function setOverlay(kind) {
+    var b = document.body;
+    b.classList.toggle('drawer-open', kind === 'drawer');
+    b.classList.toggle('sheet-open', kind === 'sheet');
+    $('#scrim').hidden = !kind;
+    $('#drawerBtn').setAttribute('aria-expanded', String(kind === 'drawer'));
+  }
+  function openDrawer() { lastFocus = document.activeElement; setOverlay('drawer'); var c = $('#side .drawer-close'); if (c) c.focus(); }
+  function openSheet() { lastFocus = document.activeElement; setOverlay('sheet'); setTimeout(function () { form.name.focus({ preventScroll: true }); }, 220); }
+  function closeOverlays() {
+    var b = document.body, was = b.classList.contains('drawer-open') || b.classList.contains('sheet-open');
+    setOverlay(null);
+    if (was && lastFocus && lastFocus.isConnected) { try { lastFocus.focus({ preventScroll: true }); } catch (e) {} }
+    lastFocus = null;
+  }
+  mq.addEventListener && mq.addEventListener('change', function () { if (!isMobile()) setOverlay(null); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && (document.body.classList.contains('drawer-open') || document.body.classList.contains('sheet-open'))) {
+      if (document.body.classList.contains('sheet-open') && state.editingItemId) resetDraft();
+      closeOverlays();
+    }
+  });
+
   /* ===== render ===== */
   function render() {
     ensureSelected();
@@ -248,7 +280,9 @@
     var trip = currentTrip();
     $('#emptyApp').hidden = !state.loaded || !!trip;
     $('#tripView').hidden = !trip;
-    if (!trip) return;
+    $('#topTitle').textContent = trip ? trip.name : 'ทริปของฉัน';
+    $('#fab').hidden = !trip;
+    if (!trip) { closeOverlays(); return; }
     if (state.editingItemId && !(state.db.items[trip.id] || {})[state.editingItemId]) resetDraft();
     renderHero(trip);
     renderSummary(trip);
@@ -278,12 +312,12 @@
         ? '<img class="hero-img" data-photo="' + esc(t.coverId) + '" alt=""><div class="hero-scrim"></div>'
         : '<svg class="hero-pattern" width="520" height="300" viewBox="0 0 520 300" fill="none" aria-hidden="true"><circle cx="380" cy="150" r="70" stroke="#fff" stroke-width="1.5"/><circle cx="380" cy="150" r="120" stroke="#fff" stroke-width="1.5"/><circle cx="380" cy="150" r="170" stroke="#fff" stroke-width="1.5"/><path d="M40 260 C 160 240, 220 120, 380 150" stroke="#fff" stroke-width="2" stroke-dasharray="6 8"/><circle cx="40" cy="260" r="6" fill="#fff"/><circle cx="380" cy="150" r="8" fill="#fff"/></svg>') +
       '<div class="hero-in"><div class="hero-actions">' +
-      '<label class="btn-glass file-btn">' + ICON.img + (t.coverId ? 'เปลี่ยนรูปปก' : 'ใส่รูปปก') +
-      '<input type="file" accept="image/*" data-change="hero-cover" aria-label="เลือกรูปปกทริป"></label>' +
-      (t.coverId ? '<button type="button" class="btn-glass" data-act="view-cover" style="cursor:zoom-in">ดูรูปปก</button>' +
-        '<button type="button" class="btn-glass" data-act="remove-cover">ลบรูปปก</button>' : '') +
-      '<button type="button" class="btn-glass" data-act="edit-trip">' + ICON.pen + 'แก้ไขทริป</button>' +
-      (canDelete ? '<button type="button" class="btn-glass danger" data-act="delete-trip">ลบทริปนี้</button>' : '') +
+      '<label class="btn-glass file-btn" title="' + (t.coverId ? 'เปลี่ยนรูปปก' : 'ใส่รูปปก') + '">' + ICON.img + '<span class="lbl">' + (t.coverId ? 'เปลี่ยนรูปปก' : 'ใส่รูปปก') + '</span>' +
+      '<input type="file" accept="image/*" data-change="hero-cover" aria-label="' + (t.coverId ? 'เปลี่ยนรูปปก' : 'ใส่รูปปก') + '"></label>' +
+      (t.coverId ? '<button type="button" class="btn-glass" data-act="view-cover" style="cursor:zoom-in" aria-label="ดูรูปปก" title="ดูรูปปก">' + ICON.zoom + '<span class="lbl">ดูรูปปก</span></button>' +
+        '<button type="button" class="btn-glass" data-act="remove-cover" aria-label="ลบรูปปก" title="ลบรูปปก">' + ICON.imgOff + '<span class="lbl">ลบรูปปก</span></button>' : '') +
+      '<button type="button" class="btn-glass" data-act="edit-trip" aria-label="แก้ไขทริป" title="แก้ไขทริป">' + ICON.penS + '<span class="lbl">แก้ไขทริป</span></button>' +
+      (canDelete ? '<button type="button" class="btn-glass danger" data-act="delete-trip" aria-label="ลบทริปนี้" title="ลบทริปนี้">' + ICON.trashS + '<span class="lbl">ลบทริปนี้</span></button>' : '') +
       '</div><div class="hero-text">' +
       '<span class="hero-dest">' + ICON.pin + esc(t.destination || 'ยังไม่ระบุจุดหมาย') + '</span>' +
       '<h1>' + esc(t.name) + '</h1>' +
@@ -311,10 +345,10 @@
     $('#summary').innerHTML =
       '<div class="total-card"><span class="lbl">ค่าใช้จ่ายรวมทั้งทริป</span><span class="big">' + money(ct.total) + '</span>' +
       '<div class="sub"><span>เฉลี่ยต่อคน <b>' + money(ct.total / people) + '</b></span><span>เฉลี่ยต่อวัน <b>' + money(ct.total / days) + '</b></span></div></div>' +
-      ct.cats.map(function (x) {
+      '<div class="cat-grid">' + ct.cats.map(function (x) {
         return '<div class="cat-card"><span class="head" style="color:' + x.c.color + '"><span class="sq" style="background:' + x.c.color + '"></span>' + x.c.label + '</span>' +
           '<span class="amt">' + money(x.sum) + '</span><span class="muted small">' + x.count + ' รายการ · ' + x.pct + '%</span></div>';
-      }).join('');
+      }).join('') + '</div>';
     var segs = ct.cats.filter(function (x) { return x.sum > 0; });
     $('#share').innerHTML = '<h2>สัดส่วนค่าใช้จ่าย</h2>' +
       '<div class="bar" role="img" aria-label="' + esc('สัดส่วน: ' + ct.cats.map(function (x) { return x.c.label + ' ' + x.pct + '%'; }).join(', ')) + '">' +
@@ -441,6 +475,7 @@
         resetDraft();
         render();
         toast(editId ? 'บันทึกการแก้ไขแล้ว' : 'เพิ่มรายการแล้ว');
+        if (isMobile()) closeOverlays();
       });
     }).catch(function () { fail('บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'); })
       .then(function () { btn.disabled = false; updateFormChrome(); });
@@ -469,8 +504,8 @@
     };
     fillForm();
     renderList(t); hydrate($('#itemList'));
-    if (window.matchMedia('(max-width: 900px)').matches) $('#itemFormCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    form.name.focus({ preventScroll: true });
+    if (isMobile()) openSheet();
+    else { if (window.matchMedia('(max-width: 900px)').matches) $('#itemFormCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); form.name.focus({ preventScroll: true }); }
   }
 
   function deleteItem(id) {
@@ -639,8 +674,17 @@
       lb.close(); return;
     }
     switch (act) {
-      case 'select-trip': selectTrip(el.dataset.id); if (window.matchMedia('(max-width: 900px)').matches) $('#tripView').scrollIntoView({ behavior: 'smooth' }); break;
-      case 'new-trip': openTripDialog(null); break;
+      case 'select-trip':
+        selectTrip(el.dataset.id);
+        if (isMobile()) { closeOverlays(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+        else if (window.matchMedia('(max-width: 900px)').matches) $('#tripView').scrollIntoView({ behavior: 'smooth' });
+        break;
+      case 'new-trip': closeOverlays(); openTripDialog(null); break;
+      case 'open-drawer': openDrawer(); break;
+      case 'open-sheet': if (!state.editingItemId) resetDraft(); openSheet(); break;
+      case 'close-overlays':
+        if (document.body.classList.contains('sheet-open') && state.editingItemId) { resetDraft(); render(); }
+        closeOverlays(); break;
       case 'edit-trip': openTripDialog(currentTrip()); break;
       case 'delete-trip': deleteTrip(); break;
       case 'close-trip-dialog': closeTripDialog(); break;
@@ -651,7 +695,7 @@
       case 'filter': state.filter = el.dataset.cat; render(); break;
       case 'edit-item': startEditItem(el.dataset.id); break;
       case 'delete-item': deleteItem(el.dataset.id); break;
-      case 'cancel-edit': resetDraft(); render(); break;
+      case 'cancel-edit': resetDraft(); render(); if (isMobile()) closeOverlays(); break;
       case 'pick-cat': state.draft.cat = el.dataset.cat; updateFormChrome(); break;
       case 'remove-draft-photo':
         var p = state.draft.photos.splice(Number(el.dataset.idx), 1)[0];
