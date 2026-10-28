@@ -1,0 +1,697 @@
+/* ทริปของฉัน — บันทึกทริปและค่าใช้จ่าย
+ * เก็บข้อมูลใน Firebase Realtime Database (ตั้งค่าใน firebase-config.js)
+ * ถ้ายังไม่ได้ตั้งค่า จะเก็บในเบราว์เซอร์เครื่องนี้แทน (localStorage + IndexedDB สำหรับรูป)
+ */
+(function () {
+  'use strict';
+
+  /* ===== ค่าคงที่ ===== */
+  var CATS = [
+    { key: 'travel', label: 'การเดินทาง', color: '#2456A6', bg: '#E7EEF9', qty: 'จำนวน (คน/วัน)', namePh: 'เช่น ตั๋วเครื่องบิน กรุงเทพ → เชียงใหม่', notePh: 'สายการบิน เวลา เลขที่จอง' },
+    { key: 'stay', label: 'ที่พัก', color: '#6542A6', bg: '#EFEAF8', qty: 'จำนวนคืน', namePh: 'เช่น โรงแรมย่านนิมมาน', notePh: 'ประเภทห้อง เช็กอิน/เอาต์' },
+    { key: 'place', label: 'ที่เที่ยว', color: '#0B6B5F', bg: '#E2F1EE', qty: 'จำนวนตั๋ว', namePh: 'เช่น ดอยอินทนนท์', notePh: 'ค่าเข้า ค่ารถ เวลาเปิด' },
+    { key: 'food', label: 'อาหาร', color: '#A84A12', bg: '#FBEBDD', qty: 'จำนวนมื้อ', namePh: 'เช่น ข้าวซอยร้านดัง', notePh: 'ร้าน เมนูเด็ด' },
+    { key: 'shop', label: 'ช้อปปิ้ง', color: '#A3326B', bg: '#FAE6EF', qty: 'จำนวนชิ้น', namePh: 'เช่น ของฝาก ร่มบ่อสร้าง', notePh: 'ร้าน ซื้อให้ใคร' }
+  ];
+  var CAT = {}; CATS.forEach(function (c) { CAT[c.key] = c; });
+  var THEMES = [
+    { key: 'sea', label: 'ทะเล', color: '#0E5468' },
+    { key: 'forest', label: 'ภูเขา', color: '#2F5D3A' },
+    { key: 'sunset', label: 'แดดเย็น', color: '#9C3D1F' },
+    { key: 'sakura', label: 'ซากุระ', color: '#8E3A5E' },
+    { key: 'sand', label: 'ทราย', color: '#7A5F28' },
+    { key: 'night', label: 'กลางคืน', color: '#1B2430' }
+  ];
+  var ROOT = 'planner';
+  var LS_KEY = 'trip-planner-v1';
+  var MAX_PHOTOS = 8;
+
+  /* ===== ตัวช่วย ===== */
+  function $(s, r) { return (r || document).querySelector(s); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function money(n) { return '฿' + Math.round(n || 0).toLocaleString('th-TH'); }
+  function uid(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function toDate(s) { return s ? new Date(s + 'T00:00:00') : null; }
+  function fmt(s, opt) { var d = toDate(s); return d && !isNaN(d) ? d.toLocaleDateString('th-TH', opt) : ''; }
+  function fmtShort(s) { return fmt(s, { day: 'numeric', month: 'short' }); }
+  function fmtLong(s) { return fmt(s, { day: 'numeric', month: 'short', year: 'numeric' }); }
+  function themeColor(k) { for (var i = 0; i < THEMES.length; i++) if (THEMES[i].key === k) return THEMES[i].color; return THEMES[0].color; }
+  function dayCount(t) {
+    var a = toDate(t.start), b = toDate(t.end);
+    if (!a || !b || b < a) return 1;
+    return Math.round((b - a) / 86400000) + 1;
+  }
+  function safeUrl(u) { return /^https?:\/\//i.test(u || '') ? u : ''; }
+  function gm(q) { return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q); }
+  function vals(o) { return o ? Object.keys(o).map(function (k) { return o[k]; }) : []; }
+  function arr(a) { return Array.isArray(a) ? a.filter(Boolean) : a ? vals(a) : []; }
+  function lineTotal(i) { return (Number(i.price) || 0) * (Number(i.qty) || 1); }
+  var toastTimer;
+  function toast(msg) {
+    var t = $('#toast'); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 3200);
+  }
+  var ICON = {
+    pin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+    pen: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>',
+    trash: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+    x: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    img: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/></svg>',
+    cal: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>',
+    clock: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    people: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.6 2.6 3 5.2"/></svg>'
+  };
+
+  /* ===== สถานะ ===== */
+  var state = {
+    db: { trips: {}, items: {} },
+    loaded: false,
+    selectedId: null,
+    filter: 'all',
+    editingItemId: null,
+    draft: null,          // ฟอร์มรายการ
+    tripDraft: null,      // ฟอร์มทริป (dialog)
+    lightbox: null,       // { title, ids:[photoId], src:[dataURL]?, index }
+    busy: 0
+  };
+
+  /* ===== ที่เก็บรูป: IndexedDB (โหมดเครื่องนี้) ===== */
+  var idb = (function () {
+    var dbp;
+    function open() {
+      if (!dbp) dbp = new Promise(function (res, rej) {
+        var r = indexedDB.open('trip-planner', 1);
+        r.onupgradeneeded = function () { r.result.createObjectStore('blobs'); };
+        r.onsuccess = function () { res(r.result); };
+        r.onerror = function () { rej(r.error); };
+      });
+      return dbp;
+    }
+    function run(mode, fn) {
+      return open().then(function (db) {
+        return new Promise(function (res, rej) {
+          var t = db.transaction('blobs', mode), req = fn(t.objectStore('blobs'));
+          t.oncomplete = function () { res(req && req.result); };
+          t.onerror = function () { rej(t.error); };
+        });
+      });
+    }
+    return {
+      get: function (k) { return run('readonly', function (s) { return s.get(k); }); },
+      set: function (k, v) { return run('readwrite', function (s) { s.put(v, k); }); },
+      del: function (k) { return run('readwrite', function (s) { s.delete(k); }); }
+    };
+  })();
+
+  /* ===== ข้อมูล: Firebase หรือเครื่องนี้ ===== */
+  var fdb = null;
+  var blobCache = new Map(); // 'thumbs/id' | 'photos/id' -> dataURL string | Promise
+
+  function setIn(obj, path, v) {
+    var parts = path.split('/'), o = obj;
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (!o[parts[i]] || typeof o[parts[i]] !== 'object') { if (v === null) return; o[parts[i]] = {}; }
+      o = o[parts[i]];
+    }
+    var last = parts[parts.length - 1];
+    if (v === null) delete o[last]; else o[last] = v;
+  }
+  function saveLocal() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state.db)); }
+    catch (e) { toast('บันทึกในเครื่องไม่สำเร็จ (พื้นที่เต็ม?)'); }
+  }
+  function loadLocal() {
+    try {
+      var d = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+      state.db.trips = d.trips || {}; state.db.items = d.items || {};
+    } catch (e) { /* ข้อมูลเสีย: เริ่มใหม่ */ }
+  }
+  /** เขียนหลาย path พร้อมกัน เช่น {'trips/t1': {...}, 'items/t1/i1': null} */
+  function commit(paths) {
+    Object.keys(paths).forEach(function (p) { setIn(state.db, p, paths[p]); });
+    render();
+    if (fdb) return fdb.ref(ROOT).update(paths).catch(function (e) { onWriteErr(e); throw e; });
+    saveLocal();
+    return Promise.resolve();
+  }
+  function getBlob(kind, id) {
+    var key = kind + '/' + id;
+    if (blobCache.has(key)) return Promise.resolve(blobCache.get(key));
+    var p = (fdb ? fdb.ref(ROOT + '/' + key).once('value').then(function (s) { return s.val(); }) : idb.get(key))
+      .then(function (v) { v = typeof v === 'string' ? v : ''; blobCache.set(key, v); return v; })
+      .catch(function () { blobCache.delete(key); return ''; });
+    blobCache.set(key, p);
+    return p;
+  }
+  function putPhoto(p) {
+    blobCache.set('thumbs/' + p.id, p.thumb); blobCache.set('photos/' + p.id, p.full);
+    if (fdb) {
+      var u = {}; u['thumbs/' + p.id] = p.thumb; u['photos/' + p.id] = p.full;
+      return fdb.ref(ROOT).update(u);
+    }
+    return Promise.all([idb.set('thumbs/' + p.id, p.thumb), idb.set('photos/' + p.id, p.full)]);
+  }
+  function deletePhotos(ids) {
+    ids = ids.filter(Boolean);
+    if (!ids.length) return Promise.resolve();
+    ids.forEach(function (id) { blobCache.delete('thumbs/' + id); blobCache.delete('photos/' + id); });
+    if (fdb) {
+      var u = {}; ids.forEach(function (id) { u['thumbs/' + id] = null; u['photos/' + id] = null; });
+      return fdb.ref(ROOT).update(u).catch(function () {});
+    }
+    return Promise.all(ids.map(function (id) { return Promise.all([idb.del('thumbs/' + id), idb.del('photos/' + id)]); })).catch(function () {});
+  }
+  /** ใส่รูปให้ <img data-thumb="id"> / <img data-photo="id"> หลัง render */
+  function hydrate(root) {
+    (root || document).querySelectorAll('img[data-thumb],img[data-photo]').forEach(function (img) {
+      var kind = img.dataset.thumb ? 'thumbs' : 'photos', id = img.dataset.thumb || img.dataset.photo;
+      var c = blobCache.get(kind + '/' + id);
+      if (typeof c === 'string') { if (c) img.src = c; return; }
+      getBlob(kind, id).then(function (src) { if (src && img.isConnected) img.src = src; });
+    });
+  }
+
+  /* ===== สถานะการซิงก์ ===== */
+  function setSync(kind) {
+    var m = {
+      local: ['', 'เก็บข้อมูลในเครื่องนี้เท่านั้น (ยังไม่ได้ตั้งค่า Firebase)'],
+      wait: ['', 'กำลังเชื่อมต่อ…'],
+      live: ['live', 'ซิงก์อยู่ · เปิดจากเครื่องไหนก็เห็นข้อมูลเดียวกัน'],
+      err: ['err', 'เชื่อมต่อไม่ได้ ข้อมูลที่แก้อาจยังไม่ถูกบันทึก']
+    }[kind];
+    var s = $('#sync'); s.className = 'sync ' + m[0]; s.lastChild.textContent = m[1];
+  }
+  function onWriteErr() { setSync('err'); toast('บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'); }
+
+  /* ===== รูป: ย่อขนาดก่อนเก็บ ===== */
+  function loadImage(file) {
+    return new Promise(function (res, rej) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () { URL.revokeObjectURL(url); res(img); };
+      img.onerror = function () { URL.revokeObjectURL(url); rej(new Error('decode')); };
+      img.src = url;
+    });
+  }
+  function toJpeg(img, max, q) {
+    var w0 = img.naturalWidth, h0 = img.naturalHeight, s = Math.min(1, max / Math.max(w0, h0));
+    var w = Math.max(1, Math.round(w0 * s)), h = Math.max(1, Math.round(h0 * s));
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); x.drawImage(img, 0, 0, w, h);
+    return c.toDataURL('image/jpeg', q);
+  }
+  function processFile(file) {
+    if (!/^image\//.test(file.type)) return Promise.reject(new Error('type'));
+    return loadImage(file).then(function (img) {
+      var full = toJpeg(img, 1600, 0.82);
+      if (full.length > 1400000) full = toJpeg(img, 1280, 0.72);
+      return { id: uid('p'), thumb: toJpeg(img, 360, 0.72), full: full, isNew: true };
+    });
+  }
+
+  /* ===== ข้อมูลที่คำนวณ ===== */
+  function currentTrip() { return state.db.trips[state.selectedId] || null; }
+  function tripItems(id) {
+    var o = state.db.items[id] || {};
+    return Object.keys(o).map(function (k) { var i = o[k]; i.id = i.id || k; return i; });
+  }
+  function tripTotal(id) { return tripItems(id).reduce(function (s, i) { return s + lineTotal(i); }, 0); }
+  function sortedTrips() {
+    return Object.keys(state.db.trips).map(function (k) { var t = state.db.trips[k]; t.id = t.id || k; return t; })
+      .sort(function (a, b) {
+        var x = a.start || '9999', y = b.start || '9999';
+        return x === y ? (b.createdAt || 0) - (a.createdAt || 0) : y.localeCompare(x);
+      });
+  }
+  function ensureSelected() {
+    if (state.selectedId && state.db.trips[state.selectedId]) return;
+    var fromHash = decodeURIComponent((location.hash || '').replace(/^#trip=/, ''));
+    var list = sortedTrips();
+    state.selectedId = state.db.trips[fromHash] ? fromHash : (list[0] ? list[0].id : null);
+  }
+  function selectTrip(id) {
+    state.selectedId = id; state.filter = 'all';
+    try { history.replaceState(null, '', '#trip=' + encodeURIComponent(id)); } catch (e) {}
+    resetDraft();
+    render();
+  }
+
+  /* ===== render ===== */
+  function render() {
+    ensureSelected();
+    var trips = sortedTrips();
+    $('#tripCount').textContent = state.loaded ? trips.length + ' ทริป' : 'กำลังโหลด…';
+    renderTripList(trips);
+    var trip = currentTrip();
+    $('#emptyApp').hidden = !state.loaded || !!trip;
+    $('#tripView').hidden = !trip;
+    if (!trip) return;
+    if (state.editingItemId && !(state.db.items[trip.id] || {})[state.editingItemId]) resetDraft();
+    renderHero(trip);
+    renderSummary(trip);
+    renderList(trip);
+    hydrate();
+  }
+
+  function renderTripList(trips) {
+    $('#tripList').innerHTML = trips.map(function (t) {
+      var items = tripItems(t.id), on = t.id === state.selectedId;
+      return '<button type="button" class="trip-card" data-act="select-trip" data-id="' + esc(t.id) + '" aria-current="' + on + '">' +
+        '<div class="trip-strip" style="background:' + themeColor(t.theme) + '">' +
+        (t.coverId ? '<img data-thumb="' + esc(t.coverId) + '" alt="">' : '') + '</div>' +
+        '<span class="t-name">' + esc(t.name) + '</span>' +
+        '<span class="t-sub">' + esc(t.destination || 'ยังไม่ระบุจุดหมาย') + (t.start ? ' · ' + fmtShort(t.start) + ' – ' + fmtShort(t.end || t.start) : '') + '</span>' +
+        '<span class="t-foot"><span class="muted small">' + items.length + ' รายการ · ' + dayCount(t) + ' วัน</span><b>' + money(tripTotal(t.id)) + '</b></span>' +
+        '</button>';
+    }).join('');
+  }
+
+  function renderHero(t) {
+    var days = dayCount(t), nights = Math.max(days - 1, 0), canDelete = true;
+    var hero = $('#hero');
+    hero.style.setProperty('--hero', themeColor(t.theme));
+    hero.innerHTML =
+      (t.coverId
+        ? '<img class="hero-img" data-photo="' + esc(t.coverId) + '" alt=""><div class="hero-scrim"></div>'
+        : '<svg class="hero-pattern" width="520" height="300" viewBox="0 0 520 300" fill="none" aria-hidden="true"><circle cx="380" cy="150" r="70" stroke="#fff" stroke-width="1.5"/><circle cx="380" cy="150" r="120" stroke="#fff" stroke-width="1.5"/><circle cx="380" cy="150" r="170" stroke="#fff" stroke-width="1.5"/><path d="M40 260 C 160 240, 220 120, 380 150" stroke="#fff" stroke-width="2" stroke-dasharray="6 8"/><circle cx="40" cy="260" r="6" fill="#fff"/><circle cx="380" cy="150" r="8" fill="#fff"/></svg>') +
+      '<div class="hero-in"><div class="hero-actions">' +
+      '<label class="btn-glass file-btn">' + ICON.img + (t.coverId ? 'เปลี่ยนรูปปก' : 'ใส่รูปปก') +
+      '<input type="file" accept="image/*" data-change="hero-cover" aria-label="เลือกรูปปกทริป"></label>' +
+      (t.coverId ? '<button type="button" class="btn-glass" data-act="view-cover" style="cursor:zoom-in">ดูรูปปก</button>' +
+        '<button type="button" class="btn-glass" data-act="remove-cover">ลบรูปปก</button>' : '') +
+      '<button type="button" class="btn-glass" data-act="edit-trip">' + ICON.pen + 'แก้ไขทริป</button>' +
+      (canDelete ? '<button type="button" class="btn-glass danger" data-act="delete-trip">ลบทริปนี้</button>' : '') +
+      '</div><div class="hero-text">' +
+      '<span class="hero-dest">' + ICON.pin + esc(t.destination || 'ยังไม่ระบุจุดหมาย') + '</span>' +
+      '<h1>' + esc(t.name) + '</h1>' +
+      '<div class="hero-meta">' +
+      '<span>' + ICON.cal + (t.start ? fmtLong(t.start) + ' – ' + fmtLong(t.end || t.start) : 'ยังไม่ระบุวัน') + '</span>' +
+      '<span>' + ICON.clock + days + ' วัน ' + nights + ' คืน</span>' +
+      '<span>' + ICON.people + (t.people || 1) + ' คน</span>' +
+      '</div></div></div>';
+  }
+
+  function catTotals(items) {
+    var total = items.reduce(function (s, i) { return s + lineTotal(i); }, 0);
+    return {
+      total: total,
+      cats: CATS.map(function (c) {
+        var list = items.filter(function (i) { return i.cat === c.key; });
+        var sum = list.reduce(function (s, i) { return s + lineTotal(i); }, 0);
+        return { c: c, sum: sum, count: list.length, pct: total > 0 ? Math.round(sum / total * 100) : 0 };
+      })
+    };
+  }
+
+  function renderSummary(t) {
+    var items = tripItems(t.id), ct = catTotals(items), people = Math.max(parseInt(t.people, 10) || 1, 1), days = dayCount(t);
+    $('#summary').innerHTML =
+      '<div class="total-card"><span class="lbl">ค่าใช้จ่ายรวมทั้งทริป</span><span class="big">' + money(ct.total) + '</span>' +
+      '<div class="sub"><span>เฉลี่ยต่อคน <b>' + money(ct.total / people) + '</b></span><span>เฉลี่ยต่อวัน <b>' + money(ct.total / days) + '</b></span></div></div>' +
+      ct.cats.map(function (x) {
+        return '<div class="cat-card"><span class="head" style="color:' + x.c.color + '"><span class="sq" style="background:' + x.c.color + '"></span>' + x.c.label + '</span>' +
+          '<span class="amt">' + money(x.sum) + '</span><span class="muted small">' + x.count + ' รายการ · ' + x.pct + '%</span></div>';
+      }).join('');
+    var segs = ct.cats.filter(function (x) { return x.sum > 0; });
+    $('#share').innerHTML = '<h2>สัดส่วนค่าใช้จ่าย</h2>' +
+      '<div class="bar" role="img" aria-label="' + esc('สัดส่วน: ' + ct.cats.map(function (x) { return x.c.label + ' ' + x.pct + '%'; }).join(', ')) + '">' +
+      segs.map(function (x) { return '<div style="width:' + (x.sum / ct.total * 100).toFixed(2) + '%;background:' + x.c.color + '"></div>'; }).join('') + '</div>' +
+      '<div class="legend">' + ct.cats.map(function (x) { return '<span><span class="sq" style="background:' + x.c.color + '"></span>' + x.c.label + ' ' + x.pct + '%</span>'; }).join('') + '</div>';
+  }
+
+  function renderList(t) {
+    var tabs = [{ key: 'all', label: 'ทั้งหมด' }].concat(CATS);
+    $('#tabs').innerHTML = tabs.map(function (c) {
+      return '<button type="button" class="tab" role="tab" data-act="filter" data-cat="' + c.key + '" aria-selected="' + (state.filter === c.key) + '">' + c.label + '</button>';
+    }).join('');
+    var items = tripItems(t.id).sort(function (a, b) {
+      return (a.date || '').localeCompare(b.date || '') || (a.createdAt || 0) - (b.createdAt || 0);
+    });
+    var shown = state.filter === 'all' ? items : items.filter(function (i) { return i.cat === state.filter; });
+    var list = $('#itemList');
+    if (!shown.length) {
+      list.innerHTML = '<div class="list-empty"><b>' + (items.length ? 'ไม่มีรายการในหมวดนี้' : 'ยังไม่มีรายการ') + '</b>' +
+        '<span>เพิ่มค่าเดินทาง ที่พัก ที่เที่ยว อาหาร หรือช้อปปิ้งจากฟอร์มด้านข้าง</span></div>';
+    } else {
+      list.innerHTML = shown.map(function (i) {
+        var c = CAT[i.cat] || CATS[0], d = toDate(i.date), photos = arr(i.photoIds), map = safeUrl(i.map);
+        return '<div class="item' + (state.editingItemId === i.id ? ' editing' : '') + '">' +
+          '<div class="item-date"><b>' + (d ? d.getDate() : '–') + '</b><span>' + (d ? d.toLocaleDateString('th-TH', { month: 'short' }) : '') + '</span></div>' +
+          '<div class="item-body"><div class="item-title"><span class="chip" style="color:' + c.color + ';background:' + c.bg + '">' + c.label + '</span><b>' + esc(i.name) + '</b></div>' +
+          ((i.note || map) ? '<div class="item-meta">' + (i.note ? '<span>' + esc(i.note) + '</span>' : '') +
+            (map ? '<a href="' + esc(map) + '" target="_blank" rel="noopener">' + ICON.pin + 'ดูแผนที่</a>' : '') + '</div>' : '') +
+          (photos.length ? '<div class="thumbs">' + photos.map(function (pid, n) {
+            return '<button type="button" class="thumb-btn" data-act="open-photo" data-id="' + esc(i.id) + '" data-idx="' + n + '" aria-label="' + esc('ขยายรูปที่ ' + (n + 1) + ' ของ ' + i.name) + '"><img data-thumb="' + esc(pid) + '" alt=""></button>';
+          }).join('') + '</div>' : '') +
+          '</div>' +
+          '<div class="item-price"><b>' + money(lineTotal(i)) + '</b><span>' + ((Number(i.qty) || 1) > 1 ? money(i.price) + ' × ' + i.qty : '') + '</span></div>' +
+          '<div class="item-actions">' +
+          '<button type="button" class="icon-btn" data-act="edit-item" data-id="' + esc(i.id) + '" aria-label="' + esc('แก้ไข ' + i.name) + '">' + ICON.pen + '</button>' +
+          '<button type="button" class="icon-btn" data-act="delete-item" data-id="' + esc(i.id) + '" aria-label="' + esc('ลบ ' + i.name) + '">' + ICON.trash + '</button>' +
+          '</div></div>';
+      }).join('');
+    }
+    var sum = shown.reduce(function (s, i) { return s + lineTotal(i); }, 0);
+    $('#listFoot').innerHTML = '<span class="muted small">' + (state.filter === 'all' ? 'รวมทุกหมวด' : 'รวมหมวด' + CAT[state.filter].label) + ' (' + shown.length + ' รายการ)</span><b class="num">' + money(sum) + '</b>';
+  }
+
+  /* ===== ฟอร์มรายการ ===== */
+  var form = $('#itemForm');
+  function emptyDraft(cat, date) {
+    return { cat: cat || 'travel', name: '', date: date || '', price: '', qty: '1', note: '', map: '', photos: [], removed: [], pending: 0 };
+  }
+  function resetDraft() {
+    var t = currentTrip(), prev = state.draft;
+    state.editingItemId = null;
+    state.draft = emptyDraft(prev ? prev.cat : 'travel', prev && prev.date ? prev.date : (t ? t.start : ''));
+    fillForm();
+  }
+  function fillForm() {
+    var d = state.draft;
+    form.name.value = d.name; form.date.value = d.date; form.price.value = d.price;
+    form.qty.value = d.qty; form.note.value = d.note; form.map.value = d.map;
+    $('#itemError').hidden = true;
+    updateFormChrome();
+    renderDraftPhotos();
+  }
+  function updateFormChrome() {
+    var d = state.draft, c = CAT[d.cat], editing = !!state.editingItemId;
+    $('#catPills').innerHTML = CATS.map(function (x) {
+      var on = x.key === d.cat;
+      return '<button type="button" class="pill" data-act="pick-cat" data-cat="' + x.key + '" aria-pressed="' + on + '" style="color:' + x.color + ';' +
+        (on ? 'background:' + x.bg + ';border-color:' + x.color : '') + '">' + x.label + '</button>';
+    }).join('');
+    $('#qtyLabel').textContent = c.qty;
+    form.name.placeholder = c.namePh;
+    form.note.placeholder = c.notePh;
+    $('#itemFormTitle').textContent = editing ? 'แก้ไขรายการ' : 'เพิ่มรายการ';
+    $('#editBadge').hidden = !editing;
+    $('#itemCancel').hidden = !editing;
+    $('#itemSubmit').textContent = editing ? 'บันทึกการแก้ไข' : '+ เพิ่มเข้าทริป';
+    var t = currentTrip();
+    $('#mapSearch').href = gm(d.name || (t && t.destination) || '');
+    var price = parseFloat(d.price) || 0, qty = Math.max(parseInt(d.qty, 10) || 1, 1);
+    $('#draftTotal').textContent = money(price * qty);
+  }
+  function renderDraftPhotos() {
+    var d = state.draft, box = $('#draftPhotos');
+    box.innerHTML = d.photos.map(function (p, n) {
+      return '<div class="ph">' + (p.thumb ? '<img src="' + esc(p.thumb) + '" alt="' + esc('รูปที่ ' + (n + 1)) + '">' : '<img data-thumb="' + esc(p.id) + '" alt="' + esc('รูปที่ ' + (n + 1)) + '">') +
+        '<button type="button" data-act="remove-draft-photo" data-idx="' + n + '" aria-label="' + esc('ลบรูปที่ ' + (n + 1)) + '">' + ICON.x + '</button></div>';
+    }).join('') +
+      (d.pending ? '<div class="ph-busy">กำลังย่อรูป…</div>' : '') +
+      (d.photos.length + d.pending < MAX_PHOTOS
+        ? '<label class="ph-add">' + ICON.img + 'เพิ่มรูป<input type="file" accept="image/*" multiple data-change="item-photos" aria-label="เพิ่มรูปภาพ"></label>' : '');
+    hydrate(box);
+  }
+  form.addEventListener('input', function (e) {
+    var n = e.target.name;
+    if (n && state.draft && n in state.draft) { state.draft[n] = e.target.value; updateFormChrome(); }
+  });
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var t = currentTrip(), d = state.draft, err = $('#itemError');
+    if (!t) return;
+    var fail = function (m) { err.textContent = m; err.hidden = false; };
+    if (!d.name.trim()) return fail('กรุณาใส่ชื่อรายการ');
+    if (d.price === '' || isNaN(parseFloat(d.price)) || parseFloat(d.price) < 0) return fail('กรุณาใส่ราคาเป็นตัวเลข');
+    if (d.map.trim() && !safeUrl(d.map.trim())) return fail('ลิงก์แผนที่ต้องขึ้นต้นด้วย https://');
+    if (d.pending) return fail('รอให้ย่อรูปเสร็จก่อน');
+    err.hidden = true;
+    var btn = $('#itemSubmit'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
+    var editId = state.editingItemId, old = editId ? (state.db.items[t.id] || {})[editId] : null;
+    var fresh = d.photos.filter(function (p) { return p.isNew; });
+    Promise.all(fresh.map(putPhoto)).then(function () {
+      var id = editId || uid('i');
+      var item = {
+        id: id, cat: d.cat, name: d.name.trim(), date: d.date || '', price: parseFloat(d.price),
+        qty: Math.max(parseInt(d.qty, 10) || 1, 1), note: d.note.trim(), map: d.map.trim(),
+        photoIds: d.photos.map(function (p) { return p.id; }),
+        createdAt: (old && old.createdAt) || Date.now(), updatedAt: Date.now()
+      };
+      var removed = d.removed.slice();
+      var u = {}; u['items/' + t.id + '/' + id] = item;
+      return commit(u).then(function () {
+        deletePhotos(removed);
+        if (state.filter !== 'all' && state.filter !== item.cat) state.filter = 'all';
+        state.draft.date = item.date;
+        resetDraft();
+        render();
+        toast(editId ? 'บันทึกการแก้ไขแล้ว' : 'เพิ่มรายการแล้ว');
+      });
+    }).catch(function () { fail('บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'); })
+      .then(function () { btn.disabled = false; updateFormChrome(); });
+  });
+
+  function addDraftPhotos(files) {
+    var d = state.draft, room = MAX_PHOTOS - d.photos.length - d.pending;
+    files = Array.prototype.slice.call(files).slice(0, Math.max(room, 0));
+    if (!files.length) return;
+    d.pending += files.length; renderDraftPhotos();
+    files.forEach(function (f) {
+      processFile(f).then(function (p) { if (state.draft === d) d.photos.push(p); })
+        .catch(function () { toast('เปิดไฟล์รูป "' + f.name + '" ไม่ได้'); })
+        .then(function () { d.pending--; if (state.draft === d) renderDraftPhotos(); });
+    });
+  }
+
+  function startEditItem(id) {
+    var t = currentTrip(), i = t && (state.db.items[t.id] || {})[id];
+    if (!i) return;
+    state.editingItemId = id;
+    state.draft = {
+      cat: i.cat, name: i.name || '', date: i.date || '', price: String(i.price == null ? '' : i.price),
+      qty: String(i.qty || 1), note: i.note || '', map: i.map || '',
+      photos: arr(i.photoIds).map(function (pid) { return { id: pid }; }), removed: [], pending: 0
+    };
+    fillForm();
+    renderList(t); hydrate($('#itemList'));
+    if (window.matchMedia('(max-width: 900px)').matches) $('#itemFormCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    form.name.focus({ preventScroll: true });
+  }
+
+  function deleteItem(id) {
+    var t = currentTrip(), i = t && (state.db.items[t.id] || {})[id];
+    if (!i || !confirm('ลบ "' + i.name + '" ?')) return;
+    var u = {}; u['items/' + t.id + '/' + id] = null;
+    if (state.editingItemId === id) resetDraft();
+    commit(u).then(function () { deletePhotos(arr(i.photoIds)); toast('ลบรายการแล้ว'); }).catch(function () {});
+  }
+
+  /* ===== ฟอร์มทริป (dialog) ===== */
+  var tripDialog = $('#tripDialog'), tripForm = $('#tripForm');
+  function openTripDialog(trip) {
+    state.tripDraft = trip
+      ? { id: trip.id, name: trip.name || '', destination: trip.destination || '', start: trip.start || '', end: trip.end || '', people: String(trip.people || 1), theme: trip.theme || 'sea', cover: trip.coverId ? { id: trip.coverId } : null, oldCover: trip.coverId || null, pending: false }
+      : { id: null, name: '', destination: '', start: '', end: '', people: '2', theme: THEMES[sortedTrips().length % THEMES.length].key, cover: null, oldCover: null, pending: false };
+    var d = state.tripDraft;
+    ['name', 'destination', 'start', 'end', 'people'].forEach(function (k) { tripForm[k].value = d[k]; });
+    $('#tripDialogTitle').textContent = trip ? 'แก้ไขทริป' : 'ทริปใหม่';
+    $('#tripSubmit').textContent = trip ? 'บันทึกการแก้ไข' : 'บันทึกทริป';
+    $('#tripError').hidden = true;
+    renderTripDraft();
+    if (typeof tripDialog.showModal === 'function') tripDialog.showModal(); else tripDialog.setAttribute('open', '');
+    tripForm.name.focus();
+  }
+  function closeTripDialog() { if (tripDialog.open) tripDialog.close(); state.tripDraft = null; }
+  function renderTripDraft() {
+    var d = state.tripDraft; if (!d) return;
+    $('#themeSwatches').innerHTML = THEMES.map(function (th) {
+      return '<button type="button" class="swatch" data-act="pick-theme" data-theme="' + th.key + '" aria-pressed="' + (d.theme === th.key) + '" aria-label="' + th.label + '" title="' + th.label + '" style="background:' + th.color + '"></button>';
+    }).join('');
+    var pv = $('#tripCoverPreview');
+    pv.style.setProperty('--hero', themeColor(d.theme));
+    pv.innerHTML = (d.cover ? (d.cover.thumb ? '<img src="' + esc(d.cover.thumb) + '" alt="">' : '<img data-thumb="' + esc(d.cover.id) + '" alt="">') : '') +
+      '<span>' + esc(d.pending ? 'กำลังย่อรูป…' : (d.name || 'ชื่อทริป')) + '</span>';
+    $('#coverBtnLabel').textContent = d.cover ? 'เปลี่ยนรูปปก' : 'อัปโหลดรูปปก';
+    $('#removeDraftCover').hidden = !d.cover;
+    hydrate(pv);
+  }
+  tripForm.addEventListener('input', function (e) {
+    var d = state.tripDraft, n = e.target.name;
+    if (d && n && n in d) { d[n] = e.target.value; if (n === 'name') renderTripDraft(); }
+  });
+  $('#tripCoverInput').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0], d = state.tripDraft;
+    e.target.value = '';
+    if (!f || !d) return;
+    d.pending = true; renderTripDraft();
+    processFile(f).then(function (p) { if (state.tripDraft === d) d.cover = p; })
+      .catch(function () { toast('เปิดไฟล์รูปนี้ไม่ได้'); })
+      .then(function () { d.pending = false; renderTripDraft(); });
+  });
+  tripForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var d = state.tripDraft, err = $('#tripError');
+    if (!d) return;
+    var fail = function (m) { err.textContent = m; err.hidden = false; };
+    if (!d.name.trim()) return fail('กรุณาใส่ชื่อทริป');
+    if (d.start && d.end && d.end < d.start) return fail('วันกลับต้องไม่ก่อนวันไป');
+    if (d.pending) return fail('รอให้ย่อรูปเสร็จก่อน');
+    var btn = $('#tripSubmit'); btn.disabled = true;
+    var old = d.id ? state.db.trips[d.id] : null;
+    (d.cover && d.cover.isNew ? putPhoto(d.cover) : Promise.resolve()).then(function () {
+      var id = d.id || uid('t');
+      var trip = {
+        id: id, name: d.name.trim(), destination: d.destination.trim(), start: d.start || '', end: d.end || d.start || '',
+        people: Math.max(parseInt(d.people, 10) || 1, 1), theme: d.theme, coverId: d.cover ? d.cover.id : '',
+        createdAt: (old && old.createdAt) || Date.now(), updatedAt: Date.now()
+      };
+      var oldCover = d.oldCover;
+      var u = {}; u['trips/' + id] = trip;
+      return commit(u).then(function () {
+        if (oldCover && oldCover !== trip.coverId) deletePhotos([oldCover]);
+        closeTripDialog();
+        if (!old) selectTrip(id);
+        toast(old ? 'บันทึกทริปแล้ว' : 'สร้างทริปแล้ว');
+      });
+    }).catch(function () { fail('บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'); })
+      .then(function () { btn.disabled = false; });
+  });
+  tripDialog.addEventListener('close', function () { state.tripDraft = null; });
+
+  function deleteTrip() {
+    var t = currentTrip(); if (!t) return;
+    var items = tripItems(t.id);
+    if (!confirm('ลบทริป "' + t.name + '" และรายการทั้งหมด ' + items.length + ' รายการ?\nลบแล้วกู้คืนไม่ได้')) return;
+    var photos = [t.coverId];
+    items.forEach(function (i) { photos = photos.concat(arr(i.photoIds)); });
+    var u = {}; u['trips/' + t.id] = null; u['items/' + t.id] = null;
+    state.selectedId = null;
+    commit(u).then(function () { deletePhotos(photos); resetDraft(); render(); toast('ลบทริปแล้ว'); }).catch(function () {});
+  }
+  function setCover(file) {
+    var t = currentTrip(); if (!t || !file) return;
+    toast('กำลังอัปโหลดรูปปก…');
+    processFile(file).then(function (p) {
+      return putPhoto(p).then(function () {
+        var old = t.coverId, u = {};
+        u['trips/' + t.id + '/coverId'] = p.id; u['trips/' + t.id + '/updatedAt'] = Date.now();
+        return commit(u).then(function () { if (old) deletePhotos([old]); toast('เปลี่ยนรูปปกแล้ว'); });
+      });
+    }).catch(function () { toast('ใส่รูปปกไม่สำเร็จ'); });
+  }
+  function removeCover() {
+    var t = currentTrip(); if (!t || !t.coverId) return;
+    var old = t.coverId, u = {};
+    u['trips/' + t.id + '/coverId'] = ''; u['trips/' + t.id + '/updatedAt'] = Date.now();
+    commit(u).then(function () { deletePhotos([old]); }).catch(function () {});
+  }
+
+  /* ===== ดูรูปเต็มจอ ===== */
+  var lb = $('#lightbox');
+  function openLightbox(title, ids, index) {
+    if (!ids.length) return;
+    state.lightbox = { title: title, ids: ids, index: index || 0 };
+    renderLightbox();
+    if (typeof lb.showModal === 'function') lb.showModal(); else lb.setAttribute('open', '');
+  }
+  function renderLightbox() {
+    var L = state.lightbox; if (!L) return;
+    var n = L.ids.length, id = L.ids[L.index], img = $('#lbImg');
+    $('#lbTitle').textContent = L.title;
+    $('#lbCounter').textContent = n > 1 ? (L.index + 1) + ' / ' + n : '';
+    img.alt = L.title + ' รูปที่ ' + (L.index + 1);
+    var thumb = blobCache.get('thumbs/' + id);
+    img.src = typeof thumb === 'string' && thumb ? thumb : '';
+    getBlob('photos', id).then(function (src) { if (state.lightbox === L && L.ids[L.index] === id && src) img.src = src; });
+    lb.querySelectorAll('.lb-prev,.lb-next').forEach(function (b) { b.hidden = n < 2; });
+    var th = $('#lbThumbs');
+    th.hidden = n < 2;
+    th.innerHTML = n < 2 ? '' : L.ids.map(function (pid, k) {
+      return '<button type="button" data-act="lb-go" data-idx="' + k + '" aria-current="' + (k === L.index) + '" aria-label="ดูรูปที่ ' + (k + 1) + '"><img data-thumb="' + esc(pid) + '" alt=""></button>';
+    }).join('');
+    hydrate(th);
+  }
+  function lbStep(dir) {
+    var L = state.lightbox; if (!L || L.ids.length < 2) return;
+    L.index = (L.index + dir + L.ids.length) % L.ids.length; renderLightbox();
+  }
+  lb.addEventListener('close', function () { state.lightbox = null; $('#lbImg').removeAttribute('src'); });
+  lb.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); lbStep(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); lbStep(1); }
+  });
+  (function swipe() {
+    var x0 = null, stage = $('#lbStage');
+    stage.addEventListener('pointerdown', function (e) { x0 = e.clientX; delete stage.dataset.swiped; });
+    stage.addEventListener('pointerup', function (e) {
+      if (x0 == null) return;
+      var dx = e.clientX - x0; x0 = null;
+      if (Math.abs(dx) > 50) { lbStep(dx < 0 ? 1 : -1); stage.dataset.swiped = '1'; }
+    });
+  })();
+
+  /* ===== ปุ่มต่าง ๆ ===== */
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-act]');
+    if (!el) return;
+    var act = el.dataset.act;
+    if (act === 'lb-close') {
+      // กดพื้นที่มืดรอบรูปเพื่อปิด แต่ไม่ปิดเมื่อกดที่รูป หรือหลังปัดเปลี่ยนรูป
+      if (el.id === 'lbStage') {
+        if (e.target !== el) return;
+        if (el.dataset.swiped) { delete el.dataset.swiped; return; }
+      }
+      lb.close(); return;
+    }
+    switch (act) {
+      case 'select-trip': selectTrip(el.dataset.id); if (window.matchMedia('(max-width: 900px)').matches) $('#tripView').scrollIntoView({ behavior: 'smooth' }); break;
+      case 'new-trip': openTripDialog(null); break;
+      case 'edit-trip': openTripDialog(currentTrip()); break;
+      case 'delete-trip': deleteTrip(); break;
+      case 'close-trip-dialog': closeTripDialog(); break;
+      case 'pick-theme': if (state.tripDraft) { state.tripDraft.theme = el.dataset.theme; renderTripDraft(); } break;
+      case 'remove-draft-cover': if (state.tripDraft) { state.tripDraft.cover = null; renderTripDraft(); } break;
+      case 'view-cover': var t = currentTrip(); if (t && t.coverId) openLightbox(t.name, [t.coverId], 0); break;
+      case 'remove-cover': removeCover(); break;
+      case 'filter': state.filter = el.dataset.cat; render(); break;
+      case 'edit-item': startEditItem(el.dataset.id); break;
+      case 'delete-item': deleteItem(el.dataset.id); break;
+      case 'cancel-edit': resetDraft(); render(); break;
+      case 'pick-cat': state.draft.cat = el.dataset.cat; updateFormChrome(); break;
+      case 'remove-draft-photo':
+        var p = state.draft.photos.splice(Number(el.dataset.idx), 1)[0];
+        if (p && !p.isNew) state.draft.removed.push(p.id);
+        renderDraftPhotos(); break;
+      case 'open-photo':
+        var tr = currentTrip(), it = tr && (state.db.items[tr.id] || {})[el.dataset.id];
+        if (it) openLightbox(it.name, arr(it.photoIds), Number(el.dataset.idx)); break;
+      case 'lb-prev': lbStep(-1); break;
+      case 'lb-next': lbStep(1); break;
+      case 'lb-go': state.lightbox.index = Number(el.dataset.idx); renderLightbox(); break;
+    }
+  });
+  document.addEventListener('change', function (e) {
+    var k = e.target.dataset && e.target.dataset.change;
+    if (!k) return;
+    var files = e.target.files;
+    if (k === 'item-photos') addDraftPhotos(files);
+    if (k === 'hero-cover' && files && files[0]) setCover(files[0]);
+    e.target.value = '';
+  });
+
+  /* ===== เริ่มทำงาน ===== */
+  state.draft = emptyDraft();
+  fillForm();
+  (function start() {
+    var cfg = window.FIREBASE_CONFIG;
+    if (!cfg || !cfg.databaseURL || !window.firebase) {
+      setSync('local'); loadLocal(); state.loaded = true; ensureSelected(); resetDraft(); render(); return;
+    }
+    setSync('wait');
+    try { firebase.initializeApp(cfg); fdb = firebase.database(); }
+    catch (e) { setSync('err'); loadLocal(); state.loaded = true; render(); return; }
+    fdb.ref('.info/connected').on('value', function (s) { setSync(s.val() ? 'live' : 'wait'); });
+    var gotTrips = false;
+    fdb.ref(ROOT + '/trips').on('value', function (snap) {
+      state.db.trips = snap.val() || {}; state.loaded = true;
+      if (!gotTrips) { gotTrips = true; ensureSelected(); resetDraft(); }
+      render();
+    }, function () { setSync('err'); state.loaded = true; render(); });
+    fdb.ref(ROOT + '/items').on('value', function (snap) { state.db.items = snap.val() || {}; render(); });
+  })();
+})();

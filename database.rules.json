@@ -1,0 +1,33 @@
+{
+  "rules": {
+    "planner": {
+      ".read": true,
+      "trips": {
+        "$tripId": {
+          ".write": true,
+          ".validate": "newData.hasChildren(['name']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 200"
+        }
+      },
+      "items": {
+        "$tripId": {
+          ".write": true,
+          "$itemId": {
+            ".validate": "newData.hasChildren(['cat', 'name', 'price']) && newData.child('name').isString() && newData.child('price').isNumber() && newData.child('price').val() >= 0"
+          }
+        }
+      },
+      "thumbs": {
+        "$photoId": {
+          ".write": true,
+          ".validate": "newData.isString() && newData.val().beginsWith('data:image/') && newData.val().length < 300000"
+        }
+      },
+      "photos": {
+        "$photoId": {
+          ".write": true,
+          ".validate": "newData.isString() && newData.val().beginsWith('data:image/') && newData.val().length < 3000000"
+        }
+      }
+    }
+  }
+}

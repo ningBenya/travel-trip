@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ทริปของฉัน · บันทึกค่าใช้จ่ายเที่ยว</title>
+<meta name="description" content="จัดทริปเที่ยว เก็บค่าเดินทาง ที่พัก ที่เที่ยว อาหาร และช้อปปิ้ง พร้อมรูปและแผนที่">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231B2430'/%3E%3Cpath d='M9 22l14-6-14-6 3 6z' fill='%23F6F4EF'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="app">
+
+  <aside class="side">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">ทริปของฉัน</span>
+        <span class="muted small" id="tripCount">กำลังโหลด…</span>
+      </div>
+    </div>
+    <div class="sync" id="sync"><span class="dot" aria-hidden="true"></span><span>กำลังเชื่อมต่อ…</span></div>
+    <button type="button" class="btn-dashed" data-act="new-trip">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      สร้างทริปใหม่
+    </button>
+    <nav class="trip-list" id="tripList" aria-label="รายการทริป"></nav>
+  </aside>
+
+  <main class="main">
+    <section class="empty-app card" id="emptyApp" hidden>
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#9AA1AC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18v13H3zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/></svg>
+      <h1>ยังไม่มีทริป</h1>
+      <p class="muted">สร้างทริปแรก แล้วเริ่มใส่ค่าเดินทาง ที่พัก ที่เที่ยว อาหาร และช้อปปิ้ง</p>
+      <button type="button" class="btn-primary" data-act="new-trip">สร้างทริปแรก</button>
+    </section>
+
+    <div class="trip-view" id="tripView" hidden>
+      <header class="hero" id="hero"></header>
+
+      <section class="summary" id="summary" aria-label="สรุปค่าใช้จ่าย"></section>
+
+      <section class="card share" id="share" aria-label="สัดส่วนค่าใช้จ่าย"></section>
+
+      <div class="cols">
+        <section class="card list-card" aria-label="รายการค่าใช้จ่าย">
+          <div class="list-head">
+            <h2>รายการทั้งหมด</h2>
+            <div class="tabs" id="tabs" role="tablist" aria-label="กรองตามหมวด"></div>
+          </div>
+          <div id="itemList"></div>
+          <div class="list-foot" id="listFoot"></div>
+        </section>
+
+        <section class="card form-card" id="itemFormCard" aria-labelledby="itemFormTitle">
+          <form id="itemForm" novalidate>
+            <div class="form-title">
+              <h2 id="itemFormTitle">เพิ่มรายการ</h2>
+              <span class="badge-edit" id="editBadge" hidden>กำลังแก้ไข</span>
+            </div>
+            <div class="pills" id="catPills" role="group" aria-label="หมวดหมู่"></div>
+            <label class="field">ชื่อรายการ
+              <input type="text" name="name" maxlength="200" autocomplete="off" required>
+            </label>
+            <label class="field">วันที่
+              <input type="date" name="date">
+            </label>
+            <div class="row2">
+              <label class="field grow3">ราคา (บาท)
+                <input type="number" name="price" min="0" step="any" inputmode="decimal" placeholder="0">
+              </label>
+              <label class="field grow2"><span id="qtyLabel">จำนวน</span>
+                <input type="number" name="qty" min="1" step="1" inputmode="numeric" value="1">
+              </label>
+            </div>
+            <label class="field">หมายเหตุ
+              <textarea name="note" rows="2" maxlength="1000"></textarea>
+            </label>
+            <div class="field">
+              <label for="mapInput">ลิงก์แผนที่ (Google Maps)</label>
+              <div class="map-row">
+                <input id="mapInput" type="url" name="map" placeholder="วางลิงก์ เช่น https://maps.app.goo.gl/…" autocomplete="off">
+                <a class="icon-btn outline" id="mapSearch" href="https://www.google.com/maps" target="_blank" rel="noopener" aria-label="ค้นหาใน Google Maps" title="ค้นหาใน Google Maps">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+                </a>
+              </div>
+              <span class="hint">กดปุ่มหมุดเพื่อค้นหาชื่อรายการใน Google Maps แล้วคัดลอกลิงก์มาวาง</span>
+            </div>
+            <div class="field">
+              <span>รูปภาพ</span>
+              <div class="photo-edit" id="draftPhotos"></div>
+            </div>
+            <div class="form-total"><span class="muted small">รวมรายการนี้</span><b class="num" id="draftTotal">฿0</b></div>
+            <p class="error" id="itemError" role="alert" hidden></p>
+            <button type="submit" class="btn-primary" id="itemSubmit">+ เพิ่มเข้าทริป</button>
+            <button type="button" class="btn-secondary" id="itemCancel" data-act="cancel-edit" hidden>ยกเลิกการแก้ไข</button>
+          </form>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<dialog id="tripDialog" class="dialog" aria-labelledby="tripDialogTitle">
+  <form id="tripForm" novalidate>
+    <div class="dialog-head">
+      <h2 id="tripDialogTitle">ทริปใหม่</h2>
+      <button type="button" class="icon-btn" data-act="close-trip-dialog" aria-label="ปิด">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="cover-preview" id="tripCoverPreview"></div>
+    <label class="field">ชื่อทริป
+      <input type="text" name="name" maxlength="200" placeholder="เช่น เที่ยวน่าน ปีใหม่" required>
+    </label>
+    <label class="field">จุดหมาย
+      <input type="text" name="destination" maxlength="200" placeholder="จังหวัด / ประเทศ">
+    </label>
+    <div class="row2">
+      <label class="field grow1">วันไป <input type="date" name="start"></label>
+      <label class="field grow1">วันกลับ <input type="date" name="end"></label>
+    </div>
+    <label class="field">จำนวนคน
+      <input type="number" name="people" min="1" step="1" value="2" inputmode="numeric">
+    </label>
+    <div class="field">
+      <span>สีพื้นหลังทริป</span>
+      <div class="swatches" id="themeSwatches" role="group" aria-label="สีพื้นหลังทริป"></div>
+    </div>
+    <div class="field">
+      <span>รูปปกทริป</span>
+      <div class="cover-actions">
+        <label class="btn-dashed small-btn file-btn"><span id="coverBtnLabel">อัปโหลดรูปปก</span>
+          <input type="file" accept="image/*" id="tripCoverInput">
+        </label>
+        <button type="button" class="btn-secondary small-btn" data-act="remove-draft-cover" id="removeDraftCover" hidden>ลบรูปปก</button>
+      </div>
+    </div>
+    <p class="error" id="tripError" role="alert" hidden></p>
+    <div class="dialog-foot">
+      <button type="button" class="btn-secondary" data-act="close-trip-dialog">ยกเลิก</button>
+      <button type="submit" class="btn-primary" id="tripSubmit">บันทึกทริป</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="lightbox" class="lightbox" aria-label="ดูรูป">
+  <div class="lb-top">
+    <div class="lb-title"><b id="lbTitle"></b><span id="lbCounter"></span></div>
+    <button type="button" class="lb-btn" data-act="lb-close" aria-label="ปิด">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="lb-stage" id="lbStage" data-act="lb-close">
+    <img id="lbImg" alt="">
+    <button type="button" class="lb-btn lb-prev" data-act="lb-prev" aria-label="รูปก่อนหน้า">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <button type="button" class="lb-btn lb-next" data-act="lb-next" aria-label="รูปถัดไป">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+    </button>
+  </div>
+  <div class="lb-thumbs" id="lbThumbs"></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

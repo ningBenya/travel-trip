@@ -1,0 +1,41 @@
+# ทริปของฉัน
+
+เว็บสำหรับจัดทริปเที่ยวและเก็บค่าใช้จ่าย สร้างได้หลายทริป แต่ละทริปใส่รายการได้ 5 หมวด คือ การเดินทาง ที่พัก ที่เที่ยว อาหาร และช้อปปิ้ง
+แต่ละรายการใส่ราคา × จำนวน วันที่ หมายเหตุ ลิงก์ Google Maps และรูปได้หลายรูป (กดขยายดูได้)
+แต่ละทริปตั้งสีพื้นหลังและรูปปกได้ หน้าสรุปจะคำนวณยอดรวม เฉลี่ยต่อคน เฉลี่ยต่อวัน และสัดส่วนแต่ละหมวดให้
+
+ถ้าตั้งค่า Firebase ไว้ ข้อมูลจะเก็บบนคลาวด์และเปิดจากเครื่องไหนก็เห็นเหมือนกัน
+ถ้ายังไม่ตั้งค่า ข้อมูลจะเก็บไว้ในเบราว์เซอร์เครื่องที่เปิดเท่านั้น
+
+## ไฟล์
+- `index.html` โครงหน้าเว็บ
+- `styles.css` หน้าตา
+- `app.js` การทำงานทั้งหมด (หมวดหมู่อยู่ที่ `CATS`, สีพื้นหลังทริปอยู่ที่ `THEMES`)
+- `firebase-config.js` ค่าตั้งค่า Firebase
+- `database.rules.json` กฎของฐานข้อมูล (คัดลอกไปวางใน Firebase Console)
+
+## ตั้งค่า Firebase (ทำครั้งเดียว)
+1. ไปที่ https://console.firebase.google.com → Add project
+2. เมนู Build → Realtime Database → Create Database → เลือก Singapore (asia-southeast1) → Start in locked mode
+3. แท็บ Rules → วางเนื้อหาจาก `database.rules.json` → Publish
+4. Project settings (รูปเฟือง) → Your apps → กดไอคอน `</>` เพิ่ม Web app → คัดลอก firebaseConfig มาวางใน `firebase-config.js`
+5. commit + push แล้วเปิดหน้าเว็บ จะเห็นจุดเขียว "ซิงก์อยู่"
+
+### ถ้าจะใช้ Firebase project เดียวกับ travel-shopping
+ข้อมูลของระบบนี้อยู่ใต้ `planner/` จึงไม่ชนกับ `shop/` และ `config/` ของ travel-shopping
+แต่ Rules ของฐานข้อมูลมีชุดเดียว ห้ามวางทับของเดิม ให้เอาก้อน `"planner": { ... }` จาก `database.rules.json`
+ไปเพิ่มข้าง ๆ `"shop"` และ `"config"` ใน Rules เดิม แล้วค่อยกด Publish
+
+## เอาขึ้น GitHub Pages
+1. สร้าง repo ใหม่บน GitHub แล้ว push โฟลเดอร์นี้ขึ้นไป
+2. Settings → Pages → Source: Deploy from a branch → Branch: `main` / `(root)` → Save
+3. รอสักครู่ จะได้ลิงก์ `https://<username>.github.io/<repo>/`
+
+## รูปภาพ
+รูปจะถูกย่อในเบราว์เซอร์ก่อนบันทึก (รูปเต็มยาวสุด 1600px และรูปย่อ 360px) แล้วเก็บใน Realtime Database ใต้ `planner/photos` และ `planner/thumbs`
+หน้ารายการโหลดเฉพาะรูปย่อ รูปเต็มโหลดตอนกดขยายเท่านั้น
+Realtime Database แบบฟรีเก็บได้ 1 GB ใส่รูปได้ราว ๆ หลายพันรูป
+
+## หมายเหตุ
+ใครก็ตามที่มีลิงก์จะเพิ่ม แก้ และลบข้อมูลได้ ส่งลิงก์ให้เฉพาะคนที่เกี่ยวข้อง
+ลิงก์ของแต่ละทริปเป็นแบบ `…/#trip=<id>` ส่งให้คนอื่นเปิดทริปนั้นได้โดยตรง
