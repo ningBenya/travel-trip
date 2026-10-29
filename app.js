@@ -492,7 +492,7 @@
     h += '<div class="ex-head' + (cover ? ' has-cover' : '') + '">' + (cover ? '<img src="' + cover + '" alt="">' : '') + '<div class="ex-shade"></div>' +
       '<div class="ex-head-in"><div class="ex-badge">DAY ' + n + '</div><div class="ex-head-text">' +
       '<div class="ex-date">' + fmt(key, { day: 'numeric', month: 'long', year: 'numeric' }) + '<span>' + fmt(key, { weekday: 'long' }) + '</span></div>' +
-      (items.length ? '<div class="ex-route">' + items.map(function (i) { return esc(i.name); }).join(' <b>→</b> ') + '</div>' : '') +
+      (items.length ? '<div class="ex-route">' + items.map(function (i) { return esc(i.name); }).join('<svg class="ex-to" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 7h15M11 2l5 5-5 5"/></svg>') + '</div>' : '') +
       (info.tagline ? '<div class="ex-tag">' + esc(info.tagline) + '</div>' : '') +
       '</div></div><div class="ex-dest">' + esc(t.destination || t.name) + '</div></div>';
     h += '<div class="ex-body">';
@@ -504,14 +504,14 @@
       if (i.hours) facts.push('<li>' + (i.cat === 'stay' ? ICON.home : ICON.clock) + '<span><b>' + (i.cat === 'stay' ? 'เช็กอิน/เอาต์' : 'เวลาเปิด') + ':</b> ' + esc(i.hours) + '</span></li>');
       if (lineTotal(i) > 0) facts.push('<li>' + ICON.coin + '<span><b>ค่าใช้จ่าย:</b> ' + money(lineTotal(i)) + ((Number(i.qty) || 1) > 1 ? ' (' + money(i.price) + ' × ' + i.qty + ')' : '') + '</span></li>');
       if (i.phone) facts.push('<li>' + ICON.phone + '<span>' + esc(i.phone) + '</span></li>');
-      h += '<div class="ex-stop' + (src ? '' : ' no-photo') + (facts.length ? '' : ' no-info') + '" style="--c:' + c.color + ';--cbg:' + c.bg + '">' +
+      h += '<div class="ex-stop' + (src ? '' : ' no-photo') + '" style="--c:' + c.color + ';--cbg:' + c.bg + '">' +
         '<div class="ex-time"><span class="ex-ic">' + ICON['c_' + c.key] + '</span><div><b>' + (i.timeStart ? esc(i.timeStart) + (i.timeEnd ? '' : ' น.') : '—') + '</b>' +
         (i.timeEnd ? '<span>– ' + esc(i.timeEnd) + ' น.</span>' : '') + '</div></div>' +
         '<div class="ex-main"><div class="ex-name">' + esc(i.name) + '</div>' +
         (i.note ? '<div class="ex-desc">' + esc(i.note) + '</div>' : '') +
-        (i.travel ? '<div class="ex-travel">' + ICON.car + '<span>' + esc(i.travel) + '</span></div>' : '') + '</div>' +
+        (i.travel ? '<div class="ex-travel">' + ICON.car + '<span>' + esc(i.travel) + '</span></div>' : '') +
+        (facts.length ? '<ul class="ex-info">' + facts.join('') + '</ul>' : '') + '</div>' +
         (src ? '<div class="ex-photo"><img src="' + src + '" alt=""></div>' : '') +
-        (facts.length ? '<div class="ex-info"><div class="ex-info-h">' + (i.cat === 'stay' ? 'ข้อมูลที่พัก' : 'ข้อมูล') + '</div><ul>' + facts.join('') + '</ul></div>' : '') +
         '</div>';
     });
     h += '</div>';
@@ -550,6 +550,26 @@
     });
     return Promise.resolve();
   }
+  /* ฝังฟอนต์ลงในรูป: โหลดไฟล์ฟอนต์จากโฟลเดอร์ fonts/ แล้วแปลงเป็น data URL */
+  var fontCssPromise = null;
+  function fontEmbedCss() {
+    if (fontCssPromise) return fontCssPromise;
+    var THAI = 'U+02D7,U+0303,U+0331,U+0E01-0E5B,U+200C-200D,U+25CC', LATIN = 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD';
+    var jobs = [];
+    [400, 500, 600, 700].forEach(function (w) {
+      [['thai', THAI], ['latin', LATIN]].forEach(function (s) {
+        jobs.push(fetch('fonts/plex-thai-' + s[0] + '-' + w + '.woff2').then(function (r) {
+          if (!r.ok) throw new Error('font'); return r.blob();
+        }).then(function (b) {
+          return new Promise(function (res) { var fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.readAsDataURL(b); });
+        }).then(function (url) {
+          return "@font-face{font-family:'IBM Plex Sans Thai';font-style:normal;font-weight:" + w + ";src:url(" + url + ") format('woff2');unicode-range:" + s[1] + "}";
+        }));
+      });
+    });
+    fontCssPromise = Promise.all(jobs).then(function (rules) { return rules.join('\n'); }).catch(function () { fontCssPromise = null; return ''; });
+    return fontCssPromise;
+  }
   var exporting = false;
   function exportDays(keys) {
     var t = currentTrip(); if (!t || exporting || !keys.length) return;
@@ -560,10 +580,13 @@
     keys.forEach(function (k) { dayItems(t, k).forEach(function (i) { ids.push(arr(i.photoIds)[0]); }); });
     ids = ids.filter(Boolean);
     var photo = {};
-    Promise.all([loadLib(), document.fonts ? document.fonts.ready : null].concat(ids.map(function (id) {
+    var fontsP = Promise.all(['400', '500', '600', '700'].map(function (w) {
+      return document.fonts && document.fonts.load ? document.fonts.load(w + ' 16px "IBM Plex Sans Thai"', 'กขabc฿') : null;
+    })).catch(function () {});
+    Promise.all([loadLib(), fontEmbedCss(), fontsP].concat(ids.map(function (id) {
       return getBlob('photos', id).then(function (src) { if (src) photo[id] = src; });
     }))).then(function (r) {
-      var lib = r[0], out = [], host = document.createElement('div');
+      var lib = r[0], fontCss = r[1], out = [], host = document.createElement('div');
       host.className = 'ex-host'; host.setAttribute('aria-hidden', 'true');
       document.body.appendChild(host);
       var safari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
@@ -576,6 +599,7 @@
           return Promise.all(imgs.map(function (im) { return im.decode ? im.decode().catch(function () {}) : null; }))
             .then(function () {
               var opt = { pixelRatio: 2, backgroundColor: '#F6F3EA', width: node.offsetWidth, height: node.offsetHeight };
+              if (fontCss) opt.fontEmbedCSS = fontCss;
               var run = function () { return lib.toPng(node, opt).catch(function () { opt.skipFonts = true; return lib.toPng(node, opt); }); };
               return safari ? run().then(run) : run();
             })
