@@ -82,6 +82,7 @@
     wallet: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h15a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a2 2 0 0 1 2-2h11"/><path d="M16 13.5h.01"/></svg>',
     chevL: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
     chevR: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
+    download: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
     plus: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
     people: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.6 2.6 3 5.2"/></svg>'
   };
@@ -313,6 +314,7 @@
     var chips = '<div class="day-tabs" role="tablist" aria-label="เลือกวัน">' + days.map(function (k, n) {
       return '<button type="button" class="day-tab" role="tab" data-act="pick-day" data-day="' + k + '" aria-selected="' + (k === key) + '"><b>Day ' + (n + 1) + '</b><span>' + fmtShort(k) + '</span></button>';
     }).join('') + '</div>';
+    chips = '<div class="day-tabs-row">' + chips + '<button type="button" class="btn-secondary small-btn export-all" data-act="export-all">' + ICON.download + 'บันทึกทุกวันเป็นรูป</button></div>';
     var route = items.map(function (i) { return i.name; });
     var head = '<section class="day-head" style="--hero:' + color + '">' +
       (t.coverId ? '<img class="hero-img" data-photo="' + esc(t.coverId) + '" alt=""><div class="day-scrim"></div>' : '') +
@@ -325,6 +327,7 @@
       '<button type="button" class="btn-glass" data-act="day-step" data-dir="-1" aria-label="วันก่อนหน้า"' + (idx === 0 ? ' disabled' : '') + '>' + ICON.chevL + '</button>' +
       '<button type="button" class="btn-glass" data-act="edit-day" aria-label="แก้ไขคำโปรยและเคล็ดลับของวันนี้">' + ICON.penS + '<span class="lbl">ข้อมูลวัน</span></button>' +
       '<button type="button" class="btn-glass" data-act="add-stop" data-day="' + key + '">' + ICON.plus + '<span class="lbl">เพิ่มจุด</span></button>' +
+      '<button type="button" class="btn-glass" data-act="export-day" aria-label="บันทึกแผนวันนี้เป็นรูป" title="บันทึกแผนวันนี้เป็นรูป">' + ICON.download + '<span class="lbl">บันทึกเป็นรูป</span></button>' +
       '<button type="button" class="btn-glass" data-act="day-step" data-dir="1" aria-label="วันถัดไป"' + (idx === days.length - 1 ? ' disabled' : '') + '>' + ICON.chevR + '</button>' +
       '</span></div></section>';
 
@@ -387,6 +390,202 @@
     var u = {}; u['trips/' + t.id + '/days/' + state.dayKey] = (tagline || tips.length) ? { tagline: tagline, tips: tips } : null;
     commit(u).then(function () { dayDialog.close(); toast('บันทึกข้อมูลวันแล้ว'); }).catch(function () {});
   });
+
+  /* ===== ช่องวันที่ วว/ดด/ปปปป และเวลา 24 ชม. =====
+   * เก็บข้อมูลเป็น yyyy-mm-dd และ HH:MM เหมือนเดิม แสดง/พิมพ์เป็น dd/mm/yyyy และ 24 ชั่วโมง
+   * ปีพิมพ์เป็น พ.ศ. ได้ (เช่น 2569) ระบบแปลงเป็น ค.ศ. ให้ */
+  function isoToDmy(s) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; }
+  function dmyToIso(s) {
+    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((s || '').trim()); if (!m) return '';
+    var d = +m[1], mo = +m[2], y = +m[3]; if (y > 2400) y -= 543;
+    var dt = new Date(y, mo - 1, d);
+    if (y < 1900 || dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return '';
+    return y + '-' + pad(mo) + '-' + pad(d);
+  }
+  function normTime(s) {
+    var m = /^(\d{1,2})[:.]?(\d{2})$/.exec((s || '').trim()); if (!m) return '';
+    var h = +m[1], mi = +m[2]; return h < 24 && mi < 60 ? pad(h) + ':' + pad(mi) : '';
+  }
+  function setField(el, v) {
+    var k = el.dataset && el.dataset.kind;
+    el.value = k === 'date' ? isoToDmy(v) : k === 'time' ? normTime(v) : (v == null ? '' : v);
+  }
+  function getField(el) {
+    var k = el.dataset && el.dataset.kind;
+    return k === 'date' ? dmyToIso(el.value) : k === 'time' ? normTime(el.value) : el.value;
+  }
+  function badField(f) {
+    var els = f.querySelectorAll('[data-kind]');
+    for (var k = 0; k < els.length; k++) {
+      var el = els[k]; if (!el.value.trim() || getField(el)) continue;
+      el.focus();
+      return el.dataset.kind === 'date' ? 'วันที่ไม่ถูกต้อง ใส่แบบ วว/ดด/ปปปป เช่น 10/12/2026' : 'เวลาไม่ถูกต้อง ใส่แบบ 24 ชั่วโมง เช่น 09:30 หรือ 17:45';
+    }
+    return '';
+  }
+  // จัดรูปแบบขณะพิมพ์ (ทำก่อน handler ของฟอร์ม)
+  document.addEventListener('input', function (e) {
+    var el = e.target, k = el.dataset && el.dataset.kind;
+    if (!k || (e.inputType && e.inputType.indexOf('delete') === 0)) return;
+    var v = el.value, digits = v.replace(/\D/g, '');
+    if (k === 'date') {
+      if (/^\d{1,2}\/\d{1,2}\/\d{0,4}$/.test(v) || /^\d{1,2}\/\d{0,2}$/.test(v)) {
+        if (/^\d\/$/.test(v)) el.value = '0' + v; // 1/ -> 01/
+        else if (/^\d{2}\/\d\/$/.test(v)) el.value = v.slice(0, 3) + '0' + v.slice(3);
+        return;
+      }
+      digits = digits.slice(0, 8);
+      el.value = digits.length > 4 ? digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4)
+        : digits.length > 2 ? digits.slice(0, 2) + '/' + digits.slice(2) + (digits.length === 4 ? '/' : '')
+        : digits + (digits.length === 2 ? '/' : '');
+    } else {
+      if (/^\d{1,2}:\d{0,2}$/.test(v)) return;
+      digits = digits.slice(0, 4);
+      el.value = digits.length > 2 ? digits.slice(0, 2) + ':' + digits.slice(2) : digits + (digits.length === 2 ? ':' : '');
+    }
+  }, true);
+  document.addEventListener('blur', function (e) {
+    var el = e.target, k = el.dataset && el.dataset.kind, v = getField(el);
+    if (k && v) el.value = k === 'date' ? isoToDmy(v) : v; // 1/2/2569 -> 01/02/2026
+  }, true);
+  // ปุ่มปฏิทินข้างช่องวันที่
+  function enhanceDates() {
+    document.querySelectorAll('input[data-kind="date"]').forEach(function (el) {
+      if (el.dataset.enhanced) return; el.dataset.enhanced = '1';
+      var wrap = document.createElement('span'); wrap.className = 'dt-wrap';
+      el.parentNode.insertBefore(wrap, el); wrap.appendChild(el);
+      var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'dt-btn';
+      btn.setAttribute('aria-label', 'เลือกจากปฏิทิน'); btn.title = 'เลือกจากปฏิทิน'; btn.innerHTML = ICON.cal;
+      var nat = document.createElement('input'); nat.type = 'date'; nat.className = 'dt-native'; nat.tabIndex = -1; nat.setAttribute('aria-hidden', 'true');
+      wrap.appendChild(btn); wrap.appendChild(nat);
+      btn.addEventListener('click', function () {
+        nat.value = getField(el) || '';
+        try { if (nat.showPicker) { nat.showPicker(); return; } } catch (err) { /* ไม่รองรับ */ }
+        nat.focus(); nat.click();
+      });
+      nat.addEventListener('change', function () {
+        if (!nat.value) return;
+        el.value = isoToDmy(nat.value);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    });
+  }
+
+  /* ===== บันทึกแผนเป็นรูป (อินโฟกราฟิกรายวัน) ===== */
+  var libPromise = null;
+  function loadLib() {
+    if (window.htmlToImage) return Promise.resolve(window.htmlToImage);
+    if (!libPromise) libPromise = new Promise(function (res, rej) {
+      var s = document.createElement('script'); s.src = 'lib/html-to-image.js';
+      s.onload = function () { window.htmlToImage ? res(window.htmlToImage) : rej(new Error('lib')); };
+      s.onerror = function () { libPromise = null; rej(new Error('lib')); };
+      document.head.appendChild(s);
+    });
+    return libPromise;
+  }
+  function slug(s) { return String(s || 'trip').replace(/[\\/:*?"<>|#%]+/g, '').replace(/\s+/g, '-').slice(0, 60) || 'trip'; }
+  function buildExportDay(t, key, n, photo) {
+    var items = dayItems(t, key), info = (t.days && t.days[key]) || {}, tips = arr(info.tips);
+    var total = items.reduce(function (s, i) { return s + lineTotal(i); }, 0);
+    var cover = t.coverId && photo[t.coverId];
+    var h = '<div class="ex" style="--hero:' + themeColor(t.theme) + '">';
+    h += '<div class="ex-head' + (cover ? ' has-cover' : '') + '">' + (cover ? '<img src="' + cover + '" alt="">' : '') + '<div class="ex-shade"></div>' +
+      '<div class="ex-head-in"><div class="ex-badge">DAY ' + n + '</div><div class="ex-head-text">' +
+      '<div class="ex-date">' + fmt(key, { day: 'numeric', month: 'long', year: 'numeric' }) + '<span>' + fmt(key, { weekday: 'long' }) + '</span></div>' +
+      (items.length ? '<div class="ex-route">' + items.map(function (i) { return esc(i.name); }).join(' <b>→</b> ') + '</div>' : '') +
+      (info.tagline ? '<div class="ex-tag">' + esc(info.tagline) + '</div>' : '') +
+      '</div></div><div class="ex-dest">' + esc(t.destination || t.name) + '</div></div>';
+    h += '<div class="ex-body">';
+    if (!items.length) h += '<div class="ex-empty">ยังไม่มีจุดแวะในวันนี้</div>';
+    items.forEach(function (i) {
+      var c = CAT[i.cat] || CATS[0], pid = arr(i.photoIds)[0], src = pid && photo[pid];
+      var facts = [];
+      if (i.address) facts.push('<li>' + ICON.pin + '<span><b>ที่อยู่:</b> ' + esc(i.address) + '</span></li>');
+      if (i.hours) facts.push('<li>' + (i.cat === 'stay' ? ICON.home : ICON.clock) + '<span><b>' + (i.cat === 'stay' ? 'เช็กอิน/เอาต์' : 'เวลาเปิด') + ':</b> ' + esc(i.hours) + '</span></li>');
+      if (lineTotal(i) > 0) facts.push('<li>' + ICON.coin + '<span><b>ค่าใช้จ่าย:</b> ' + money(lineTotal(i)) + ((Number(i.qty) || 1) > 1 ? ' (' + money(i.price) + ' × ' + i.qty + ')' : '') + '</span></li>');
+      if (i.phone) facts.push('<li>' + ICON.phone + '<span>' + esc(i.phone) + '</span></li>');
+      h += '<div class="ex-stop' + (src ? '' : ' no-photo') + (facts.length ? '' : ' no-info') + '" style="--c:' + c.color + ';--cbg:' + c.bg + '">' +
+        '<div class="ex-time"><span class="ex-ic">' + ICON['c_' + c.key] + '</span><div><b>' + (i.timeStart ? esc(i.timeStart) + (i.timeEnd ? '' : ' น.') : '—') + '</b>' +
+        (i.timeEnd ? '<span>– ' + esc(i.timeEnd) + ' น.</span>' : '') + '</div></div>' +
+        '<div class="ex-main"><div class="ex-name">' + esc(i.name) + '</div>' +
+        (i.note ? '<div class="ex-desc">' + esc(i.note) + '</div>' : '') +
+        (i.travel ? '<div class="ex-travel">' + ICON.car + '<span>' + esc(i.travel) + '</span></div>' : '') + '</div>' +
+        (src ? '<div class="ex-photo"><img src="' + src + '" alt=""></div>' : '') +
+        (facts.length ? '<div class="ex-info"><div class="ex-info-h">' + (i.cat === 'stay' ? 'ข้อมูลที่พัก' : 'ข้อมูล') + '</div><ul>' + facts.join('') + '</ul></div>' : '') +
+        '</div>';
+    });
+    h += '</div>';
+    if (items.length > 1) {
+      h += '<div class="ex-card"><div class="ex-card-h">' + ICON.car + 'เส้นทางโดยรวม <span>(ระยะทางและเวลาโดยประมาณ)</span></div><div class="ex-chain">' +
+        items.map(function (i, k) {
+          var c = CAT[i.cat] || CATS[0], pid = arr(i.photoIds)[0], src = pid && photo[pid];
+          return (k ? '<div class="ex-leg"><span class="ex-arrow"></span><span>' + esc(i.travel || '') + '</span></div>' : '') +
+            '<div class="ex-node"><span class="ex-pic" style="background:' + c.bg + ';color:' + c.color + '">' + (src ? '<img src="' + src + '" alt="">' : ICON['c_' + c.key]) + '</span><b>' + esc(i.name) + '</b></div>';
+        }).join('') + '</div></div>';
+    }
+    if (tips.length) {
+      h += '<div class="ex-card"><div class="ex-card-h">' + ICON.bulb + 'เคล็ดลับเพิ่มเติม</div><ul class="ex-tips">' +
+        tips.map(function (x) { return '<li>' + ICON.check + '<span>' + esc(x) + '</span></li>'; }).join('') + '</ul></div>';
+    }
+    h += '<div class="ex-foot"><span>' + esc(t.name) + ' · Day ' + n + '</span><span>' + items.length + ' จุด · ค่าใช้จ่ายวันนี้ <b>' + money(total) + '</b></span></div>';
+    return h + '</div>';
+  }
+  function dataUrlToFile(url, name) {
+    var parts = url.split(','), bin = atob(parts[1]), u8 = new Uint8Array(bin.length);
+    for (var k = 0; k < bin.length; k++) u8[k] = bin.charCodeAt(k);
+    return new File([u8], name, { type: 'image/png' });
+  }
+  function deliver(files) {
+    if (isMobile() && navigator.canShare && navigator.share) {
+      var fs = files.map(function (f) { return dataUrlToFile(f.url, f.name); });
+      if (navigator.canShare({ files: fs })) return navigator.share({ files: fs }).catch(function () {});
+    }
+    files.forEach(function (f, k) {
+      setTimeout(function () {
+        var url = URL.createObjectURL(dataUrlToFile(f.url, f.name));
+        var a = document.createElement('a'); a.href = url; a.download = f.name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      }, k * 400);
+    });
+    return Promise.resolve();
+  }
+  var exporting = false;
+  function exportDays(keys) {
+    var t = currentTrip(); if (!t || exporting || !keys.length) return;
+    exporting = true;
+    var all = tripDays(t);
+    toast(keys.length > 1 ? 'กำลังสร้างรูป ' + keys.length + ' วัน…' : 'กำลังสร้างรูป…');
+    var ids = [t.coverId];
+    keys.forEach(function (k) { dayItems(t, k).forEach(function (i) { ids.push(arr(i.photoIds)[0]); }); });
+    ids = ids.filter(Boolean);
+    var photo = {};
+    Promise.all([loadLib(), document.fonts ? document.fonts.ready : null].concat(ids.map(function (id) {
+      return getBlob('photos', id).then(function (src) { if (src) photo[id] = src; });
+    }))).then(function (r) {
+      var lib = r[0], out = [], host = document.createElement('div');
+      host.className = 'ex-host'; host.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(host);
+      var safari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      return keys.reduce(function (p, key) {
+        return p.then(function () {
+          var n = all.indexOf(key) + 1;
+          host.innerHTML = buildExportDay(t, key, n, photo);
+          var node = host.firstChild;
+          var imgs = Array.prototype.slice.call(node.querySelectorAll('img'));
+          return Promise.all(imgs.map(function (im) { return im.decode ? im.decode().catch(function () {}) : null; }))
+            .then(function () {
+              var opt = { pixelRatio: 2, backgroundColor: '#F6F3EA', width: node.offsetWidth, height: node.offsetHeight };
+              var run = function () { return lib.toPng(node, opt).catch(function () { opt.skipFonts = true; return lib.toPng(node, opt); }); };
+              return safari ? run().then(run) : run();
+            })
+            .then(function (url) { out.push({ url: url, name: slug(t.name) + '-Day' + n + '.png' }); });
+        });
+      }, Promise.resolve()).then(function () { host.remove(); return deliver(out); }, function (e) { host.remove(); throw e; });
+    }).then(function () { toast(keys.length > 1 ? 'บันทึกรูปแล้ว ' + keys.length + ' วัน' : 'บันทึกรูปแล้ว'); })
+      .catch(function () { toast('สร้างรูปไม่สำเร็จ ลองใหม่อีกครั้ง'); })
+      .then(function () { exporting = false; });
+  }
 
   /* ===== มือถือ: เมนูทริป (drawer) และฟอร์มแบบแผ่นล่าง (sheet) ===== */
   var mq = window.matchMedia('(max-width: 760px)');
@@ -552,9 +751,9 @@
   }
   function fillForm() {
     var d = state.draft;
-    form.name.value = d.name; form.date.value = d.date; form.price.value = d.price;
+    form.name.value = d.name; setField(form.date, d.date); form.price.value = d.price;
     form.qty.value = d.qty; form.note.value = d.note; form.map.value = d.map;
-    ['timeStart', 'timeEnd', 'travel', 'address', 'hours', 'phone'].forEach(function (k) { form[k].value = d[k] || ''; });
+    ['timeStart', 'timeEnd', 'travel', 'address', 'hours', 'phone'].forEach(function (k) { setField(form[k], d[k] || ''); });
     $('#moreFields').open = !!(d.travel || d.address || d.hours || d.phone);
     $('#itemError').hidden = true;
     updateFormChrome();
@@ -594,7 +793,7 @@
   }
   form.addEventListener('input', function (e) {
     var n = e.target.name;
-    if (n && state.draft && n in state.draft) { state.draft[n] = e.target.value; updateFormChrome(); }
+    if (n && state.draft && n in state.draft) { state.draft[n] = getField(e.target); updateFormChrome(); }
   });
   form.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -603,6 +802,7 @@
     var fail = function (m) { err.textContent = m; err.hidden = false; };
     if (!d.name.trim()) return fail('กรุณาใส่ชื่อรายการ');
     if (d.price !== '' && (isNaN(parseFloat(d.price)) || parseFloat(d.price) < 0)) return fail('ราคาต้องเป็นตัวเลข (ไม่มีค่าใช้จ่ายเว้นว่างได้)');
+    var bad = badField(form); if (bad) return fail(bad);
     if (d.timeStart && d.timeEnd && d.timeEnd < d.timeStart) return fail('เวลาสิ้นสุดต้องไม่ก่อนเวลาเริ่ม');
     if (d.map.trim() && !safeUrl(d.map.trim())) return fail('ลิงก์แผนที่ต้องขึ้นต้นด้วย https://');
     if (d.pending) return fail('รอให้ย่อรูปเสร็จก่อน');
@@ -680,7 +880,7 @@
       ? { id: trip.id, name: trip.name || '', destination: trip.destination || '', start: trip.start || '', end: trip.end || '', people: String(trip.people || 1), theme: trip.theme || 'sea', cover: trip.coverId ? { id: trip.coverId } : null, oldCover: trip.coverId || null, pending: false }
       : { id: null, name: '', destination: '', start: '', end: '', people: '2', theme: THEMES[sortedTrips().length % THEMES.length].key, cover: null, oldCover: null, pending: false };
     var d = state.tripDraft;
-    ['name', 'destination', 'start', 'end', 'people'].forEach(function (k) { tripForm[k].value = d[k]; });
+    ['name', 'destination', 'start', 'end', 'people'].forEach(function (k) { setField(tripForm[k], d[k]); });
     $('#tripDialogTitle').textContent = trip ? 'แก้ไขทริป' : 'ทริปใหม่';
     $('#tripSubmit').textContent = trip ? 'บันทึกการแก้ไข' : 'บันทึกทริป';
     $('#tripError').hidden = true;
@@ -704,7 +904,7 @@
   }
   tripForm.addEventListener('input', function (e) {
     var d = state.tripDraft, n = e.target.name;
-    if (d && n && n in d) { d[n] = e.target.value; if (n === 'name') renderTripDraft(); }
+    if (d && n && n in d) { d[n] = getField(e.target); if (n === 'name') renderTripDraft(); }
   });
   $('#tripCoverInput').addEventListener('change', function (e) {
     var f = e.target.files && e.target.files[0], d = state.tripDraft;
@@ -721,6 +921,7 @@
     if (!d) return;
     var fail = function (m) { err.textContent = m; err.hidden = false; };
     if (!d.name.trim()) return fail('กรุณาใส่ชื่อทริป');
+    var bad = badField(tripForm); if (bad) return fail(bad);
     if (d.start && d.end && d.end < d.start) return fail('วันกลับต้องไม่ก่อนวันไป');
     if (d.pending) return fail('รอให้ย่อรูปเสร็จก่อน');
     var btn = $('#tripSubmit'); btn.disabled = true;
@@ -851,6 +1052,11 @@
         if (ds[di]) { state.dayKey = ds[di]; render(); var dt = document.querySelector('.day-tab[aria-selected="true"]'); if (dt) dt.scrollIntoView({ block: 'nearest', inline: 'center' }); }
         break;
       case 'edit-day': openDayDialog(); break;
+      case 'export-day': exportDays([state.dayKey]); break;
+      case 'export-all':
+        var te = currentTrip();
+        if (te) exportDays(tripDays(te).filter(function (k) { return dayItems(te, k).length; }));
+        break;
       case 'close-day-dialog': dayDialog.close(); break;
       case 'add-stop':
         resetDraft(); state.draft.date = el.dataset.day; if (state.draft.cat === 'travel') state.draft.cat = 'place'; fillForm();
@@ -895,6 +1101,7 @@
   });
 
   /* ===== เริ่มทำงาน ===== */
+  enhanceDates();
   state.draft = emptyDraft();
   fillForm();
   (function start() {

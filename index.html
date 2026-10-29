@@ -85,11 +85,11 @@
               <input type="text" name="name" maxlength="200" autocomplete="off" required>
             </label>
             <label class="field">วันที่
-              <input type="date" name="date">
+              <input type="text" data-kind="date" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="วว/ดด/ปปปป" name="date">
             </label>
             <div class="row2">
-              <label class="field grow1">เวลาเริ่ม <input type="time" name="timeStart"></label>
-              <label class="field grow1">ถึง <input type="time" name="timeEnd"></label>
+              <label class="field grow1">เวลาเริ่ม <input type="text" data-kind="time" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="ชช:นน" name="timeStart"></label>
+              <label class="field grow1">ถึง <input type="text" data-kind="time" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="ชช:นน" name="timeEnd"></label>
             </div>
             <div class="row2">
               <label class="field grow3">ราคา (บาท)
@@ -165,8 +165,8 @@
       <input type="text" name="destination" maxlength="200" placeholder="จังหวัด / ประเทศ">
     </label>
     <div class="row2">
-      <label class="field grow1">วันไป <input type="date" name="start"></label>
-      <label class="field grow1">วันกลับ <input type="date" name="end"></label>
+      <label class="field grow1">วันไป <input type="text" data-kind="date" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="วว/ดด/ปปปป" name="start"></label>
+      <label class="field grow1">วันกลับ <input type="text" data-kind="date" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="วว/ดด/ปปปป" name="end"></label>
     </div>
     <label class="field">จำนวนคน
       <input type="number" name="people" min="1" step="1" value="2" inputmode="numeric">
