@@ -109,7 +109,7 @@ h1,h2{margin:0}
 .legend span{display:flex;align-items:center;gap:6px}
 
 /* list */
-.list-card{flex:999 1 460px;min-width:0;overflow:hidden}
+.list-card{flex:none;min-width:0;overflow:hidden}
 .list-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px 12px}
 .list-head h2{font-size:17px}
 .tabs{display:flex;flex-wrap:wrap;gap:6px}
