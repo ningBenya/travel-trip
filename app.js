@@ -654,6 +654,7 @@
     renderHero(trip);
     renderViewTabs();
     var plan = state.view === 'plan';
+    $('#tripView').setAttribute('data-view', state.view);
     $('#summary').hidden = plan; $('#share').hidden = plan; $('#costList').hidden = plan; $('#planView').hidden = !plan;
     if (plan) renderPlan(trip); else { renderSummary(trip); renderList(trip); }
     hydrate();

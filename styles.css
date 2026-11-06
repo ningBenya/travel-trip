@@ -497,3 +497,16 @@ h1,h2{margin:0}
 .ex-info{list-style:none;margin:2px 0 0;padding:10px 14px;display:flex;flex-direction:column;gap:6px;background:#F3EFE4;border-radius:12px;font-size:14px;color:#3A4238}
 .ex-stop.no-photo .ex-info{flex-direction:row;flex-wrap:wrap;gap:6px 22px}
 .ex-info-h{display:none}
+
+/* ===== จอกว้าง: กล่องรายการสูงเท่าฟอร์มเพิ่มรายการ และเลื่อนดูรายการด้านใน ===== */
+@media (min-width:1180px){
+  .trip-view[data-view="cost"] .cols{align-items:stretch}
+  .trip-view[data-view="cost"] .view-main{position:relative;min-height:520px}
+  .trip-view[data-view="cost"] #costList{position:absolute;inset:0;display:flex;flex-direction:column}
+  .trip-view[data-view="cost"] #itemList{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#C9C2B3 transparent}
+  .trip-view[data-view="cost"] #itemList::-webkit-scrollbar{width:8px}
+  .trip-view[data-view="cost"] #itemList::-webkit-scrollbar-thumb{background:#C9C2B3;border-radius:999px}
+  .trip-view[data-view="cost"] .list-head,.trip-view[data-view="cost"] .list-foot{flex:0 0 auto}
+  .trip-view[data-view="cost"] .list-head{border-bottom:1px solid var(--line-soft)}
+  .trip-view[data-view="cost"] #itemList > .item:first-child,.trip-view[data-view="cost"] #itemList > .list-empty{border-top:none}
+}
