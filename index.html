@@ -7,7 +7,7 @@
 <meta name="description" content="จัดทริปเที่ยว เก็บค่าเดินทาง ที่พัก ที่เที่ยว อาหาร และช้อปปิ้ง พร้อมรูปและแผนที่">
 <link rel="preload" href="fonts/plex-thai-thai-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/plex-thai-thai-700.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="styles.css?v=20261106">
+<link rel="stylesheet" href="styles.css?v=20261118b">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231B2430'/%3E%3Cpath d='M9 22l14-6-14-6 3 6z' fill='%23F6F4EF'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -191,6 +191,93 @@
   </form>
 </dialog>
 
+<dialog id="aiDialog" class="dialog ai-dialog" aria-labelledby="aiTitle">
+  <div class="ai-wrap">
+    <div class="dialog-head">
+      <h2 id="aiTitle"><span class="ai-spark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></span>ให้ AI ช่วยจัดแพลน</h2>
+      <button type="button" class="icon-btn" data-act="close-ai" aria-label="ปิด"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+
+    <div class="ai-setup" id="aiSetup" hidden>
+      <p><b>ยังไม่ได้ตั้งค่า AI</b></p>
+      <p class="muted">ต้องสร้าง Cloudflare Worker จากไฟล์ <code>ai-worker/worker.js</code> แล้วใส่ URL ในไฟล์ <code>ai-config.js</code> ก่อน ดูขั้นตอนใน README.md หัวข้อ "ตั้งค่า AI ช่วยจัดแพลน"</p>
+    </div>
+
+    <form id="aiForm" novalidate>
+      <p class="muted small ai-intro" id="aiIntro"></p>
+      <div class="field"><span>สไตล์ที่ชอบ (เลือกได้หลายอย่าง)</span>
+        <div class="ai-chips"><label class="ai-chip"><input type="checkbox" name="styles" value="คาเฟ่"><span>คาเฟ่</span></label><label class="ai-chip"><input type="checkbox" name="styles" value="ธรรมชาติ / วิว"><span>ธรรมชาติ / วิว</span></label><label class="ai-chip"><input type="checkbox" name="styles" value="วัด / วัฒนธรรม"><span>วัด / วัฒนธรรม</span></label><label class="ai-chip"><input type="checkbox" name="styles" value="อาหารท้องถิ่น"><span>อาหารท้องถิ่น</span></label><label class="ai-chip"><input type="checkbox" name="styles" value="ช้อปปิ้ง"><span>ช้อปปิ้ง</span></label><label class="ai-chip"><input type="checkbox" name="styles" value="จุดถ่ายรูป"><span>จุดถ่ายรูป</span></label><label class="ai-chip"><input type="checkbox" name="styles" value="กิจกรรม / ผจญภัย"><span>กิจกรรม / ผจญภัย</span></label><label class="ai-chip"><input type="checkbox" name="styles" value="เด็ก / ครอบครัว"><span>เด็ก / ครอบครัว</span></label></div>
+      </div>
+      <div class="field"><span>จังหวะการเที่ยว</span>
+        <div class="ai-chips"><label class="ai-chip"><input type="radio" name="pace" value="ชิล ๆ ไม่รีบ"><span>ชิล ๆ ไม่รีบ</span></label><label class="ai-chip"><input type="radio" name="pace" value="ปานกลาง" checked><span>ปานกลาง</span></label><label class="ai-chip"><input type="radio" name="pace" value="เที่ยวแน่น ๆ"><span>เที่ยวแน่น ๆ</span></label></div>
+      </div>
+      <div class="field"><span>ให้ AI ทำอะไร</span>
+        <div class="ai-options">
+          <label class="ai-opt"><input type="radio" name="scope" value="all" checked><span><b>เติมทุกวันให้สมบูรณ์</b><small>คงจุดเดิมไว้ แล้วเติมช่วงที่ยังว่าง</small></span></label>
+          <label class="ai-opt"><input type="radio" name="scope" value="empty"><span><b>เติมเฉพาะวันที่ยังว่าง</b><small>วันที่มีจุดแวะแล้วจะไม่แตะ</small></span></label>
+          <label class="ai-opt"><input type="checkbox" name="addStay" checked><span><b>แนะนำที่พักให้คืนที่ยังไม่มี</b></span></label>
+        </div>
+      </div>
+      <label class="field">งบต่อคน (บาท) สำหรับส่วนที่ AI เพิ่ม · ไม่บังคับ
+        <input type="number" name="budget" min="0" step="100" inputmode="numeric" placeholder="เช่น 5000">
+      </label>
+      <label class="field">บอก AI เพิ่มเติม · ไม่บังคับ
+        <textarea name="notes" rows="2" maxlength="1000" placeholder="เช่น ไม่อยากตื่นเช้า มีผู้สูงอายุไปด้วย อยากกินข้าวซอย"></textarea>
+      </label>
+      <label class="field" id="aiCodeField">รหัสใช้งาน AI (ตั้งไว้ใน Worker · ใส่ครั้งเดียว ระบบจำไว้ในเครื่องนี้)
+        <input type="password" name="code" autocomplete="off">
+      </label>
+      <p class="error" id="aiError" role="alert" hidden></p>
+      <div class="dialog-foot">
+        <button type="button" class="btn-secondary" data-act="close-ai">ยกเลิก</button>
+        <button type="submit" class="btn-primary" id="aiSubmit"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span id="aiSubmitLabel">สร้างคำสั่งสำหรับ AI</span></button>
+      </div>
+    </form>
+
+
+    <div class="ai-manual" id="aiManual" hidden>
+      <ol class="ai-steps">
+        <li>
+          <b>คัดลอกคำสั่ง แล้วไปวางในแชท AI</b>
+          <textarea id="aiPrompt" class="ai-box" rows="5" readonly aria-label="คำสั่งสำหรับ AI"></textarea>
+          <div class="ai-links">
+            <button type="button" class="btn-primary small-btn" data-act="ai-copy" id="aiCopyBtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>คัดลอกคำสั่ง</button>
+            <a class="btn-secondary small-btn" href="https://claude.ai/new" target="_blank" rel="noopener">เปิด Claude<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+            <a class="btn-secondary small-btn" href="https://chatgpt.com/" target="_blank" rel="noopener">เปิด ChatGPT<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+            <a class="btn-secondary small-btn" href="https://gemini.google.com/app" target="_blank" rel="noopener">เปิด Gemini<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+          </div>
+        </li>
+        <li>
+          <b>คัดลอกคำตอบของ AI มาวางที่นี่</b>
+          <textarea id="aiAnswer" class="ai-box" rows="6" placeholder="วางคำตอบจาก AI ทั้งหมดที่นี่ (ส่วนที่ขึ้นต้นด้วย { )" aria-label="คำตอบจาก AI"></textarea>
+          <span class="hint">คุยปรับแพลนกับ AI ได้ตามสบาย เช่น "เปลี่ยนร้านอาหารมื้อเย็น" พอได้แบบที่ชอบ ให้พิมพ์ "ส่ง JSON ฉบับล่าสุด" แล้วคัดลอกคำตอบนั้นมาวาง</span>
+        </li>
+      </ol>
+      <p class="error" id="aiManualError" role="alert" hidden></p>
+      <div class="dialog-foot">
+        <button type="button" class="btn-secondary" data-act="ai-back-form">ปรับคำขอ</button>
+        <button type="button" class="btn-primary" data-act="ai-parse">ดูตัวอย่างแพลน</button>
+      </div>
+    </div>
+
+    <div class="ai-loading" id="aiLoading" hidden role="status">
+      <span class="ai-spinner" aria-hidden="true"></span>
+      <b>AI กำลังจัดแพลนให้…</b>
+      <span class="muted small">อาจใช้เวลา 30–90 วินาที อย่าเพิ่งปิดหน้านี้</span>
+    </div>
+
+    <div class="ai-preview" id="aiPreview" hidden>
+      <p class="ai-summary" id="aiSummary"></p>
+      <p class="muted small" id="aiPreviewNote">เลือกเฉพาะที่อยากเพิ่ม จุดแวะเดิมจะไม่ถูกแก้หรือลบ · ข้อมูลจาก AI เช่น เวลาเปิดและราคา ควรตรวจสอบอีกครั้ง</p>
+      <div class="ai-days" id="aiDays"></div>
+      <div class="dialog-foot ai-foot">
+        <button type="button" class="btn-secondary" data-act="ai-back">ปรับคำขอ / ลองใหม่</button>
+        <button type="button" class="btn-primary" data-act="ai-apply" id="aiApply">เพิ่มที่เลือกลงทริป</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="dayDialog" class="dialog" aria-labelledby="dayDialogTitle">
   <form id="dayForm" novalidate>
     <div class="dialog-head">
@@ -234,6 +321,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=20261106"></script>
+<script src="ai-config.js?v=20261118"></script>
+<script src="app.js?v=20261118b"></script>
 </body>
 </html>

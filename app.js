@@ -82,6 +82,7 @@
     wallet: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h15a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a2 2 0 0 1 2-2h11"/><path d="M16 13.5h.01"/></svg>',
     chevL: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
     chevR: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
+    spark: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
     download: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
     plus: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
     people: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.6 2.6 3 5.2"/></svg>'
@@ -314,7 +315,8 @@
     var chips = '<div class="day-tabs" role="tablist" aria-label="เลือกวัน">' + days.map(function (k, n) {
       return '<button type="button" class="day-tab" role="tab" data-act="pick-day" data-day="' + k + '" aria-selected="' + (k === key) + '"><b>Day ' + (n + 1) + '</b><span>' + fmtShort(k) + '</span></button>';
     }).join('') + '</div>';
-    chips = '<div class="day-tabs-row">' + chips + '<button type="button" class="btn-secondary small-btn export-all" data-act="export-all">' + ICON.download + 'บันทึกทุกวันเป็นรูป</button></div>';
+    chips = '<div class="day-tabs-row">' + chips + '<div class="plan-tools"><button type="button" class="btn-ai" data-act="open-ai">' + ICON.spark + 'ให้ AI ช่วยจัดแพลน</button>' +
+      '<button type="button" class="btn-secondary small-btn export-all" data-act="export-all">' + ICON.download + 'บันทึกทุกวันเป็นรูป</button></div></div>';
     var route = items.map(function (i) { return i.name; });
     var head = '<section class="day-head" style="--hero:' + color + '">' +
       (t.coverId ? '<img class="hero-img" data-photo="' + esc(t.coverId) + '" alt=""><div class="day-scrim"></div>' : '') +
@@ -344,7 +346,7 @@
         (i.timeEnd ? '<span>– ' + esc(i.timeEnd) + '</span>' : (i.timeStart ? '' : '<span>ไม่ระบุเวลา</span>')) + '</div>' +
         '<div class="stop-card">' +
         '<div class="stop-main">' +
-        '<div class="stop-title"><span class="stop-ic" aria-hidden="true">' + ICON['c_' + c.key] + '</span><div><h3>' + esc(i.name) + '</h3><span class="chip" style="color:' + c.color + ';background:' + c.bg + '">' + c.label + '</span></div>' +
+        '<div class="stop-title"><span class="stop-ic" aria-hidden="true">' + ICON['c_' + c.key] + '</span><div><h3>' + esc(i.name) + '</h3><span class="chip" style="color:' + c.color + ';background:' + c.bg + '">' + c.label + '</span>' + aiBadge(i) + '</div>' +
         '<span class="stop-actions"><button type="button" class="icon-btn" data-act="edit-item" data-id="' + esc(i.id) + '" aria-label="' + esc('แก้ไข ' + i.name) + '">' + ICON.pen + '</button>' +
         '<button type="button" class="icon-btn" data-act="delete-item" data-id="' + esc(i.id) + '" aria-label="' + esc('ลบ ' + i.name) + '">' + ICON.trash + '</button></span></div>' +
         (i.note ? '<p class="stop-desc">' + esc(i.note) + '</p>' : '') +
@@ -611,6 +613,267 @@
       .then(function () { exporting = false; });
   }
 
+  /* ===== AI ช่วยจัดแพลน =====
+   * ค่าเริ่มต้น: สร้างคำสั่งให้คัดลอกไปวางใน Claude / ChatGPT / Gemini แล้ววางคำตอบกลับมา (ฟรี)
+   * ถ้าใส่ endpoint ใน ai-config.js: เรียก Claude ผ่าน Cloudflare Worker โดยตรง (กดปุ่มเดียวจบ) */
+  var AI_CODE_KEY = 'trip-planner-ai-code', AI_PREFS_KEY = 'trip-planner-ai-prefs';
+  var aiDialog = $('#aiDialog'), aiForm = $('#aiForm'), aiState = null, aiAbort = null;
+  function aiBadge(i) { return i.ai ? '<span class="ai-badge" title="ข้อมูลจาก AI ควรตรวจสอบเวลาเปิดและราคาอีกครั้ง">' + ICON.spark + 'AI แนะนำ</span>' : ''; }
+  function aiEndpoint() { var c = window.AI_CONFIG; return c && typeof c.endpoint === 'string' ? c.endpoint.trim().replace(/\/+$/, '') : ''; }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+  function aiPane(name) {
+    $('#aiSetup').hidden = name !== 'setup';
+    $('#aiManual').hidden = name !== 'manual';
+    aiForm.hidden = name !== 'form';
+    $('#aiLoading').hidden = name !== 'loading';
+    $('#aiPreview').hidden = name !== 'preview';
+  }
+  function openAi() {
+    var t = currentTrip(); if (!t) return;
+    var days = tripDays(t);
+    closeOverlays();
+    if (!days.length) { toast('ใส่วันไป–วันกลับของทริปก่อน แล้วค่อยให้ AI จัดแพลน'); return; }
+    else {
+      aiPane('form');
+      var empty = days.filter(function (k) { return !dayItems(t, k).length; }).length;
+      $('#aiIntro').textContent = (t.destination || t.name) + ' · ' + days.length + ' วัน · ' + (t.people || 1) + ' คน' +
+        (empty ? ' · ยังว่าง ' + empty + ' วัน' : '');
+      var prefs = {}; try { prefs = JSON.parse(lsGet(AI_PREFS_KEY) || '{}'); } catch (e) {}
+      aiForm.querySelectorAll('input[name=styles]').forEach(function (el) { el.checked = (prefs.styles || []).indexOf(el.value) >= 0; });
+      if (prefs.pace) aiForm.querySelectorAll('input[name=pace]').forEach(function (el) { el.checked = el.value === prefs.pace; });
+      if (typeof prefs.addStay === 'boolean') aiForm.addStay.checked = prefs.addStay;
+      aiForm.budget.value = ''; aiForm.notes.value = prefs.notes || '';
+      aiForm.code.value = '';
+      $('#aiCodeField').hidden = !aiEndpoint() || !!lsGet(AI_CODE_KEY);
+      $('#aiSubmitLabel').textContent = aiEndpoint() ? 'จัดแพลนเลย' : 'สร้างคำสั่งสำหรับ AI';
+      $('#aiAnswer').value = ''; aiState = null;
+      $('#aiError').hidden = true;
+    }
+    if (typeof aiDialog.showModal === 'function') aiDialog.showModal(); else aiDialog.setAttribute('open', '');
+  }
+  function aiFail(msg) { aiPane('form'); var e = $('#aiError'); e.textContent = msg; e.hidden = false; }
+  aiForm.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var t = currentTrip(); if (!t) return;
+    var direct = !!aiEndpoint();
+    var code = aiForm.code.value.trim() || lsGet(AI_CODE_KEY) || '';
+    if (direct && !code) { $('#aiCodeField').hidden = false; aiFail('กรุณาใส่รหัสใช้งาน AI'); aiForm.code.focus(); return; }
+    var prefs = {
+      styles: Array.prototype.map.call(aiForm.querySelectorAll('input[name=styles]:checked'), function (el) { return el.value; }),
+      pace: (aiForm.querySelector('input[name=pace]:checked') || {}).value || 'ปานกลาง',
+      scope: (aiForm.querySelector('input[name=scope]:checked') || {}).value || 'all',
+      addStay: aiForm.addStay.checked,
+      budget: parseFloat(aiForm.budget.value) || 0,
+      notes: aiForm.notes.value.trim()
+    };
+    lsSet(AI_PREFS_KEY, JSON.stringify({ styles: prefs.styles, pace: prefs.pace, addStay: prefs.addStay, notes: prefs.notes }));
+    var days = tripDays(t);
+    var payload = {
+      trip: { name: t.name, destination: t.destination || '', people: t.people || 1, start: t.start || days[0], end: t.end || days[days.length - 1] },
+      prefs: prefs,
+      days: days.map(function (k, n) {
+        var info = (t.days && t.days[k]) || {};
+        return { date: k, dayNo: n + 1, tagline: info.tagline || '', existing: dayItems(t, k).map(function (i) {
+          return { cat: i.cat, name: i.name, timeStart: i.timeStart || '', timeEnd: i.timeEnd || '', note: (i.note || '').slice(0, 200) };
+        }) };
+      })
+    };
+    if (!direct) {
+      $('#aiPrompt').value = buildAiPrompt(payload);
+      $('#aiManualError').hidden = true;
+      aiPane('manual');
+      return;
+    }
+    aiPane('loading');
+    aiAbort = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () { if (aiAbort) aiAbort.abort(); }, 180000);
+    fetch(aiEndpoint(), {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Access-Code': code },
+      body: JSON.stringify(payload), signal: aiAbort ? aiAbort.signal : undefined
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (data) { return { ok: r.ok, status: r.status, data: data }; });
+    }).then(function (res) {
+      clearTimeout(timer);
+      if (!aiDialog.open) return;
+      if (res.status === 401 || (res.data && res.data.error === 'access')) {
+        lsSet(AI_CODE_KEY, null); $('#aiCodeField').hidden = false; aiForm.code.value = '';
+        return aiFail('รหัสใช้งาน AI ไม่ถูกต้อง');
+      }
+      if (!res.ok || !res.data || !res.data.plan) return aiFail((res.data && res.data.message) || 'AI ตอบกลับผิดพลาด ลองใหม่อีกครั้ง');
+      lsSet(AI_CODE_KEY, code);
+      showAiPreview(t, res.data.plan, prefs);
+    }).catch(function (e) {
+      clearTimeout(timer);
+      if (!aiDialog.open) return;
+      aiFail(e && e.name === 'AbortError' ? 'AI ใช้เวลานานเกินไป ลองใหม่ หรือเลือกเติมเฉพาะวันที่ว่าง'
+        : 'เชื่อมต่อ AI ไม่ได้ ตรวจสอบอินเทอร์เน็ต, URL ใน ai-config.js และ ALLOWED_ORIGINS ใน Worker');
+    });
+  });
+  function buildAiPrompt(p) {
+    var t = p.trip, pr = p.prefs, L = [];
+    L.push('ช่วยจัดแผนเที่ยวรายวันให้สมบูรณ์ ในฐานะผู้ช่วยวางแผนเที่ยวมืออาชีพ');
+    L.push('');
+    L.push('กติกา:');
+    L.push('- ตอบเป็นภาษาไทย ใช้สถานที่ที่มีอยู่จริงและเป็นที่รู้จักในจุดหมายนั้น ห้ามแต่งชื่อสถานที่ขึ้นเอง');
+    L.push('- จุดแวะที่มีอยู่แล้วในแผนปัจจุบันต้องคงไว้ ห้ามส่งซ้ำ ให้จัดจุดใหม่แทรกในช่วงเวลาที่ว่าง ไม่ให้เวลาทับกัน');
+    L.push('- เรียงจุดให้เส้นทางต่อเนื่อง ไม่ย้อนไปมา เผื่อเวลาเดินทางตามจริง มีมื้ออาหารในเวลาที่เหมาะสม');
+    L.push('- วันแรกเริ่มหลังเวลาเดินทางมาถึง วันสุดท้ายจบก่อนเวลาเดินทางกลับ ถ้ามีข้อมูลการเดินทางอยู่แล้ว');
+    L.push('- ราคาเป็นบาทโดยประมาณต่อหน่วย ให้ qty ตามจำนวนคนหรือจำนวนคืน ถ้าไม่ทราบราคาให้ price = 0');
+    L.push('- ถ้าไม่แน่ใจเวลาเปิด–ปิด ให้ hours เป็น "" ห้ามเดา');
+    L.push('');
+    L.push('ทริป: ' + t.name);
+    L.push('จุดหมาย: ' + (t.destination || '-'));
+    L.push('จำนวนคน: ' + (t.people || 1));
+    L.push('ช่วงวันที่: ' + t.start + ' ถึง ' + t.end);
+    L.push('');
+    L.push('ความต้องการ:');
+    L.push('- สไตล์ที่ชอบ: ' + (pr.styles.length ? pr.styles.join(', ') : 'ทั่วไป'));
+    L.push('- จังหวะ: ' + pr.pace);
+    if (pr.budget) L.push('- งบประมาณต่อคนทั้งทริป (ไม่รวมที่มีอยู่แล้ว): ประมาณ ' + pr.budget + ' บาท');
+    L.push('- ขอบเขต: ' + (pr.scope === 'empty' ? 'เติมเฉพาะวันที่ยังไม่มีจุดแวะเลย วันที่มีจุดแล้วให้ stops เป็น []' : 'เติมทุกวันให้สมบูรณ์ โดยคงจุดเดิมไว้'));
+    L.push('- ที่พัก: ' + (pr.addStay ? 'ถ้าคืนไหนยังไม่มีที่พัก ให้แนะนำที่พัก 1 แห่ง (cat = "stay")' : 'ไม่ต้องเพิ่มที่พัก'));
+    if (pr.notes) L.push('- เพิ่มเติม: ' + pr.notes);
+    L.push('');
+    L.push('แผนปัจจุบัน:');
+    p.days.forEach(function (d) {
+      L.push('Day ' + d.dayNo + ' (' + d.date + ')' + (d.tagline ? ' — ' + d.tagline : ''));
+      if (!d.existing.length) L.push('  (ยังว่าง)');
+      d.existing.forEach(function (s) {
+        L.push('  - ' + (s.timeStart ? s.timeStart + (s.timeEnd ? '–' + s.timeEnd : '') : 'ไม่ระบุเวลา') + ' [' + s.cat + '] ' + s.name + (s.note ? ' : ' + s.note : ''));
+      });
+    });
+    L.push('');
+    L.push('รูปแบบคำตอบ: ตอบเป็น JSON อย่างเดียวในบล็อกโค้ด ไม่ต้องมีคำอธิบายอื่น ตามโครงนี้');
+    L.push('```json');
+    L.push(JSON.stringify({
+      summary: 'สรุปแนวคิดของแพลน 1-3 ประโยค',
+      days: [{
+        date: p.days[0].date, tagline: 'คำโปรยของวันสั้น ๆ', tips: ['เคล็ดลับ 2-4 ข้อ'],
+        stops: [{ cat: 'place', name: 'ชื่อสถานที่จริง', timeStart: '13:30', timeEnd: '15:00', note: 'รายละเอียดสั้น ๆ ว่าทำอะไร ไฮไลต์ เมนูเด็ด',
+          travel: 'การเดินทางจากจุดก่อนหน้า เช่น รถ 20–30 นาที (~12 กม.)', address: 'ตำบล/อำเภอ', hours: '', price: 0, qty: p.trip.people || 1,
+          mapQuery: 'ชื่ออังกฤษ + เมือง สำหรับค้นใน Google Maps' }]
+      }]
+    }, null, 2));
+    L.push('```');
+    L.push('- days ต้องมีครบทุกวัน: ' + p.days.map(function (d) { return d.date; }).join(', '));
+    L.push('- cat ใช้ได้เฉพาะ: "travel" (การเดินทาง), "stay" (ที่พัก), "place" (ที่เที่ยว), "food" (อาหาร), "shop" (ช้อปปิ้ง)');
+    L.push('- stops ใส่เฉพาะจุดใหม่ เวลาเป็นแบบ 24 ชั่วโมง HH:MM');
+    return L.join('\n');
+  }
+  function parseAiText(txt) {
+    var s = String(txt || '').trim(), m, blocks = [], re = /```(?:json)?\s*([\s\S]*?)```/gi;
+    while ((m = re.exec(s))) blocks.push(m[1]);
+    var cands = blocks.filter(function (b) { return b.indexOf('"days"') >= 0; });
+    if (cands.length) s = cands[cands.length - 1];
+    var a = s.indexOf('{'), b = s.lastIndexOf('}');
+    if (a < 0 || b < a) return null;
+    s = s.slice(a, b + 1);
+    var tries = [s, s.replace(/[“”]/g, '"').replace(/,\s*([}\]])/g, '$1')];
+    for (var k = 0; k < tries.length; k++) {
+      try { var o = JSON.parse(tries[k]); if (o && Array.isArray(o.days)) return o; } catch (e) {}
+    }
+    return null;
+  }
+  function copyText(text, btn) {
+    var done = function () { var old = btn.innerHTML; btn.textContent = 'คัดลอกแล้ว ✓'; setTimeout(function () { btn.innerHTML = old; }, 1800); };
+    var fallback = function () { var ta = $('#aiPrompt'); ta.focus(); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { toast('กดค้างที่ข้อความแล้วเลือกคัดลอก'); } };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  }
+  function cleanAiPlan(t, plan) {
+    var days = tripDays(t), byDate = {};
+    (Array.isArray(plan.days) ? plan.days : []).forEach(function (d) {
+      if (!d || days.indexOf(d.date) < 0 || byDate[d.date]) return;
+      var stops = (Array.isArray(d.stops) ? d.stops : []).map(function (s) {
+        if (!s || !CAT[s.cat] || !String(s.name || '').trim()) return null;
+        var price = Number(s.price); price = isFinite(price) && price > 0 ? Math.round(price) : 0;
+        return {
+          cat: s.cat, name: String(s.name).trim().slice(0, 200), timeStart: normTime(s.timeStart), timeEnd: normTime(s.timeEnd),
+          note: String(s.note || '').trim().slice(0, 1000), travel: String(s.travel || '').trim().slice(0, 200),
+          address: String(s.address || '').trim().slice(0, 500), hours: String(s.hours || '').trim().slice(0, 200),
+          price: price, qty: Math.max(1, Math.min(99, parseInt(s.qty, 10) || 1)),
+          map: gm(String(s.mapQuery || '').trim() || (s.name + ' ' + (t.destination || '')))
+        };
+      }).filter(Boolean).sort(function (a, b) { return (a.timeStart || '99').localeCompare(b.timeStart || '99'); });
+      byDate[d.date] = {
+        date: d.date, stops: stops,
+        tagline: String(d.tagline || '').trim().slice(0, 200),
+        tips: (Array.isArray(d.tips) ? d.tips : []).map(function (x) { return String(x || '').trim().slice(0, 300); }).filter(Boolean).slice(0, 8)
+      };
+    });
+    return { summary: String(plan.summary || '').trim(), days: days.map(function (k) { return byDate[k]; }).filter(Boolean) };
+  }
+  function showAiPreview(t, rawPlan, prefs) {
+    var plan = cleanAiPlan(t, rawPlan), all = tripDays(t);
+    aiState = { tripId: t.id, plan: plan, mode: aiEndpoint() ? 'direct' : 'manual' };
+    $('#aiPreviewNote').textContent = 'เลือกเฉพาะที่อยากเพิ่ม จุดแวะเดิมจะไม่ถูกแก้หรือลบ · ข้อมูลจาก AI เช่น เวลาเปิดและราคา ควรตรวจสอบอีกครั้ง';
+    $('#aiSummary').textContent = plan.summary || 'AI จัดแพลนเสร็จแล้ว';
+    var html = plan.days.map(function (d, di) {
+      var info = (t.days && t.days[d.date]) || {}, existing = dayItems(t, d.date).length;
+      if (!d.stops.length && !d.tagline && !d.tips.length) return '';
+      return '<section class="ai-day"><h3>Day ' + (all.indexOf(d.date) + 1) + ' <span>' + fmtLong(d.date) + (existing ? ' · มีอยู่แล้ว ' + existing + ' จุด' : '') + '</span></h3>' +
+        (d.stops.length ? d.stops.map(function (s, si) {
+          var c = CAT[s.cat];
+          return '<label class="ai-row"><input type="checkbox" data-ai="stop" data-d="' + di + '" data-s="' + si + '" checked>' +
+            '<span class="ai-time">' + (s.timeStart ? esc(s.timeStart) + (s.timeEnd ? '–' + esc(s.timeEnd) : '') : '—') + '</span>' +
+            '<span class="ai-main"><span class="ai-name"><span class="chip" style="color:' + c.color + ';background:' + c.bg + '">' + c.label + '</span><b>' + esc(s.name) + '</b></span>' +
+            (s.note ? '<small>' + esc(s.note) + '</small>' : '') +
+            '<small class="ai-meta">' + [s.travel ? ICON.car + esc(s.travel) : '', s.price ? money(s.price * s.qty) + (s.qty > 1 ? ' (' + money(s.price) + ' × ' + s.qty + ')' : '') : ''].filter(Boolean).join(' · ') + '</small></span></label>';
+        }).join('') : '<p class="muted small">ไม่มีจุดแวะใหม่สำหรับวันนี้</p>') +
+        (d.tagline ? '<label class="ai-row ai-extra"><input type="checkbox" data-ai="tag" data-d="' + di + '"' + (info.tagline ? '' : ' checked') + '><span class="ai-main"><small><b>คำโปรย:</b> ' + esc(d.tagline) +
+          (info.tagline ? ' <i>(แทนของเดิม)</i>' : '') + '</small></span></label>' : '') +
+        (d.tips.length ? '<label class="ai-row ai-extra"><input type="checkbox" data-ai="tips" data-d="' + di + '" checked><span class="ai-main"><small><b>เคล็ดลับ ' + d.tips.length + ' ข้อ:</b> ' + d.tips.map(esc).join(' · ') + '</small></span></label>' : '') +
+        '</section>';
+    }).join('');
+    $('#aiDays').innerHTML = html || '<p class="muted">AI ไม่มีอะไรเพิ่มให้ ลองเลือก "เติมทุกวันให้สมบูรณ์" หรือบอกความต้องการเพิ่มเติม</p>';
+    updateAiCount();
+    aiPane('preview');
+    $('#aiPreview').scrollTop = 0;
+  }
+  function updateAiCount() {
+    var n = aiDialog.querySelectorAll('input[data-ai="stop"]:checked').length;
+    var any = aiDialog.querySelectorAll('input[data-ai]:checked').length;
+    var b = $('#aiApply'); b.disabled = !any;
+    b.textContent = n ? 'เพิ่ม ' + n + ' จุดลงทริป' : 'บันทึกที่เลือก';
+  }
+  aiDialog.addEventListener('change', function (e) { if (e.target.dataset && e.target.dataset.ai) updateAiCount(); });
+  function applyAi() {
+    if (!aiState) return;
+    var t = state.db.trips[aiState.tripId]; if (!t) return;
+    var u = {}, added = 0, firstDay = null, now = Date.now();
+    aiState.plan.days.forEach(function (d, di) {
+      d.stops.forEach(function (s, si) {
+        var cb = aiDialog.querySelector('input[data-ai="stop"][data-d="' + di + '"][data-s="' + si + '"]');
+        if (!cb || !cb.checked) return;
+        var id = uid('i');
+        u['items/' + t.id + '/' + id] = {
+          id: id, cat: s.cat, name: s.name, date: d.date, timeStart: s.timeStart, timeEnd: s.timeEnd, note: s.note, travel: s.travel,
+          address: s.address, hours: s.hours, phone: '', price: s.price, qty: s.qty, map: s.map, photoIds: [], ai: true,
+          createdAt: now + added, updatedAt: now
+        };
+        added++; if (!firstDay) firstDay = d.date;
+      });
+      var tagCb = aiDialog.querySelector('input[data-ai="tag"][data-d="' + di + '"]');
+      var tipCb = aiDialog.querySelector('input[data-ai="tips"][data-d="' + di + '"]');
+      var useTag = tagCb && tagCb.checked, useTips = tipCb && tipCb.checked;
+      if (useTag || useTips) {
+        var info = (t.days && t.days[d.date]) || {}, tips = arr(info.tips);
+        if (useTips) d.tips.forEach(function (x) { if (tips.indexOf(x) < 0) tips.push(x); });
+        u['trips/' + t.id + '/days/' + d.date] = { tagline: useTag ? d.tagline : (info.tagline || ''), tips: tips.slice(0, 30) };
+        if (!firstDay) firstDay = d.date;
+      }
+    });
+    if (!Object.keys(u).length) return;
+    var b = $('#aiApply'); b.disabled = true; b.textContent = 'กำลังบันทึก…';
+    commit(u).then(function () {
+      aiDialog.close();
+      if (firstDay) state.dayKey = firstDay;
+      state.view = 'plan'; render();
+      toast(added ? 'เพิ่ม ' + added + ' จุดจาก AI แล้ว' : 'บันทึกแล้ว');
+    }).catch(function () { b.disabled = false; updateAiCount(); });
+  }
+  aiDialog.addEventListener('close', function () { if (aiAbort) { try { aiAbort.abort(); } catch (e) {} } aiState = null; });
+
   /* ===== มือถือ: เมนูทริป (drawer) และฟอร์มแบบแผ่นล่าง (sheet) ===== */
   var mq = window.matchMedia('(max-width: 760px)');
   function isMobile() { return mq.matches; }
@@ -744,7 +1007,7 @@
         var c = CAT[i.cat] || CATS[0], d = toDate(i.date), photos = arr(i.photoIds), map = safeUrl(i.map);
         return '<div class="item' + (state.editingItemId === i.id ? ' editing' : '') + '">' +
           '<div class="item-date"><b>' + (d ? d.getDate() : '–') + '</b><span>' + (d ? d.toLocaleDateString('th-TH', { month: 'short' }) : '') + '</span></div>' +
-          '<div class="item-body"><div class="item-title"><span class="chip" style="color:' + c.color + ';background:' + c.bg + '">' + c.label + '</span><b>' + esc(i.name) + '</b></div>' +
+          '<div class="item-body"><div class="item-title"><span class="chip" style="color:' + c.color + ';background:' + c.bg + '">' + c.label + '</span><b>' + esc(i.name) + '</b>' + aiBadge(i) + '</div>' +
           ((i.note || map || i.timeStart) ? '<div class="item-meta">' + (i.timeStart ? '<span class="num">' + esc(timeRange(i)) + ' น.</span>' : '') + (i.note ? '<span>' + esc(i.note) + '</span>' : '') +
             (map ? '<a href="' + esc(map) + '" target="_blank" rel="noopener">' + ICON.pin + 'ดูแผนที่</a>' : '') + '</div>' : '') +
           (photos.length ? '<div class="thumbs">' + photos.map(function (pid, n) {
@@ -845,6 +1108,7 @@
         photoIds: d.photos.map(function (p) { return p.id; }),
         createdAt: (old && old.createdAt) || Date.now(), updatedAt: Date.now()
       };
+      if (old && old.ai) item.ai = true;
       var removed = d.removed.slice();
       var u = {}; u['items/' + t.id + '/' + id] = item;
       return commit(u).then(function () {
@@ -1077,6 +1341,23 @@
         if (ds[di]) { state.dayKey = ds[di]; render(); var dt = document.querySelector('.day-tab[aria-selected="true"]'); if (dt) dt.scrollIntoView({ block: 'nearest', inline: 'center' }); }
         break;
       case 'edit-day': openDayDialog(); break;
+      case 'open-ai': openAi(); break;
+      case 'close-ai': aiDialog.close(); break;
+      case 'ai-back':
+        if (aiState && aiState.mode === 'manual') { aiPane('manual'); break; }
+        aiPane('form'); $('#aiError').hidden = true; break;
+      case 'ai-back-form': aiPane('form'); $('#aiError').hidden = true; break;
+      case 'ai-copy': copyText($('#aiPrompt').value, el); break;
+      case 'ai-parse':
+        var tp = currentTrip(), raw = $('#aiAnswer').value, me = $('#aiManualError');
+        if (!raw.trim()) { me.textContent = 'วางคำตอบจาก AI ก่อน'; me.hidden = false; break; }
+        var parsed = parseAiText(raw);
+        if (!parsed) { me.textContent = 'อ่านคำตอบไม่ได้ ลองพิมพ์บอก AI ว่า "ส่งเป็น JSON อย่างเดียวตามรูปแบบเดิม" แล้วคัดลอกมาวางใหม่'; me.hidden = false; break; }
+        me.hidden = true;
+        showAiPreview(tp, parsed, null);
+        aiState.mode = 'manual';
+        break;
+      case 'ai-apply': applyAi(); break;
       case 'export-day': exportDays([state.dayKey]); break;
       case 'export-all':
         var te = currentTrip();
