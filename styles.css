@@ -591,3 +591,33 @@ h1,h2{margin:0}
 }
 .ai-links a{white-space:nowrap}
 @media (max-width:760px){.ai-links a svg{display:none}.ai-links a{padding:6px 4px}}
+
+/* ===== กล่องยืนยันการลบ ===== */
+.confirm-dialog{width:min(420px,calc(100vw - 32px))}
+.cf-wrap{padding:26px 24px 20px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}
+.cf-icon{width:56px;height:56px;border-radius:50%;background:#FCE8E6;color:#B3261E;display:flex;align-items:center;justify-content:center;margin-bottom:2px}
+.cf-wrap h2{font-size:20px}
+.cf-body{width:100%}
+.cf-item{display:flex;gap:12px;align-items:center;text-align:left;background:#F8F6F1;border:1px solid var(--line-soft);border-radius:14px;padding:10px 12px}
+.cf-item img{width:52px;height:52px;border-radius:10px;object-fit:cover;flex:0 0 auto;background:#ECE8DF}
+.cf-item-ic{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.cf-item-text{min-width:0;display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--muted)}
+.cf-item-text b{font-size:15px;color:var(--ink);overflow-wrap:anywhere}
+.cf-item-text .chip{font-size:11px;padding:1px 8px}
+.cf-cover{width:64px;height:48px;border-radius:10px;overflow:hidden;flex:0 0 auto}
+.cf-cover img{width:100%;height:100%;border-radius:0}
+.cf-note{margin:0;font-size:13px;color:#8A1F17}
+.cf-actions{display:flex;gap:10px;width:100%;margin-top:6px}
+.cf-actions button{flex:1 1 0}
+.btn-danger{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:8px 16px;border-radius:10px;font-weight:600;cursor:pointer;border:none;background:#B3261E;color:#fff}
+.btn-danger:hover{background:#951F18}
+.confirm-dialog[open]{animation:cfin .16s ease-out}
+@keyframes cfin{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+@media (max-width:760px){
+  .confirm-dialog{width:100%}
+  .cf-wrap{padding:22px 18px calc(18px + env(safe-area-inset-bottom))}
+  .cf-actions{flex-direction:column-reverse}
+  .confirm-dialog[open]{animation-name:cfup}
+  @keyframes cfup{from{transform:translateY(30%)}to{transform:none}}
+}
+@media (prefers-reduced-motion:reduce){.confirm-dialog[open]{animation:none}}

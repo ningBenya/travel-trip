@@ -1154,9 +1154,42 @@
     else { if (window.matchMedia('(max-width: 900px)').matches) $('#itemFormCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); form.name.focus({ preventScroll: true }); }
   }
 
+  /* ===== กล่องยืนยัน (แทน confirm() ของเบราว์เซอร์) ===== */
+  var cfDialog = $('#confirmDialog'), cfResolve = null;
+  function askConfirm(o) {
+    $('#cfTitle').textContent = o.title;
+    $('#cfBody').innerHTML = o.html || '';
+    $('#cfNote').textContent = o.note || '';
+    $('#cfNote').hidden = !o.note;
+    $('#cfYes').textContent = o.okLabel || 'ลบ';
+    hydrate($('#cfBody'));
+    closeOverlays();
+    return new Promise(function (res) {
+      cfResolve = res;
+      if (typeof cfDialog.showModal === 'function') cfDialog.showModal(); else cfDialog.setAttribute('open', '');
+      $('#cfNo').focus();
+    });
+  }
+  function cfFinish(v) { var r = cfResolve; cfResolve = null; if (cfDialog.open) cfDialog.close(); if (r) r(v); }
+  cfDialog.addEventListener('close', function () { if (cfResolve) cfFinish(false); });
+  cfDialog.addEventListener('click', function (e) { if (e.target === cfDialog) cfFinish(false); }); // กดพื้นหลังเพื่อยกเลิก
+
   function deleteItem(id) {
     var t = currentTrip(), i = t && (state.db.items[t.id] || {})[id];
-    if (!i || !confirm('ลบ "' + i.name + '" ?')) return;
+    if (!i) return;
+    var c = CAT[i.cat] || CATS[0], pid = arr(i.photoIds)[0];
+    var when = [i.date ? fmtShort(i.date) : '', i.timeStart ? timeRange(i) + ' น.' : ''].filter(Boolean).join(' · ');
+    askConfirm({
+      title: 'ลบรายการนี้?',
+      html: '<div class="cf-item">' + (pid ? '<img data-thumb="' + esc(pid) + '" alt="">' : '<span class="cf-item-ic" style="background:' + c.bg + ';color:' + c.color + '">' + ICON['c_' + c.key] + '</span>') +
+        '<span class="cf-item-text"><b>' + esc(i.name) + '</b><span><span class="chip" style="color:' + c.color + ';background:' + c.bg + '">' + c.label + '</span>' +
+        (when ? ' ' + esc(when) : '') + (lineTotal(i) ? ' · ' + money(lineTotal(i)) : '') + '</span></span></div>',
+      note: arr(i.photoIds).length ? 'รูปของรายการนี้ ' + arr(i.photoIds).length + ' รูปจะถูกลบด้วย' : ''
+    }).then(function (ok) {
+      if (ok) doDeleteItem(t, i, id);
+    });
+  }
+  function doDeleteItem(t, i, id) {
     var u = {}; u['items/' + t.id + '/' + id] = null;
     if (state.editingItemId === id) resetDraft();
     commit(u).then(function () { deletePhotos(arr(i.photoIds)); toast('ลบรายการแล้ว'); }).catch(function () {});
@@ -1238,7 +1271,16 @@
   function deleteTrip() {
     var t = currentTrip(); if (!t) return;
     var items = tripItems(t.id);
-    if (!confirm('ลบทริป "' + t.name + '" และรายการทั้งหมด ' + items.length + ' รายการ?\nลบแล้วกู้คืนไม่ได้')) return;
+    askConfirm({
+      title: 'ลบทริปนี้?',
+      html: '<div class="cf-item cf-trip"><span class="cf-cover" style="background:' + themeColor(t.theme) + '">' + (t.coverId ? '<img data-thumb="' + esc(t.coverId) + '" alt="">' : '') + '</span>' +
+        '<span class="cf-item-text"><b>' + esc(t.name) + '</b><span>' + esc(t.destination || '') + (t.start ? ' · ' + fmtShort(t.start) + ' – ' + fmtShort(t.end || t.start) : '') + '</span>' +
+        '<span>' + items.length + ' รายการ · ' + money(tripTotal(t.id)) + '</span></span></div>',
+      note: 'รายการ รูป และแผนรายวันทั้งหมดของทริปนี้จะถูกลบ และกู้คืนไม่ได้',
+      okLabel: 'ลบทริป'
+    }).then(function (ok) { if (ok) doDeleteTrip(t, items); });
+  }
+  function doDeleteTrip(t, items) {
     var photos = [t.coverId];
     items.forEach(function (i) { photos = photos.concat(arr(i.photoIds)); });
     var u = {}; u['trips/' + t.id] = null; u['items/' + t.id] = null;
@@ -1341,6 +1383,8 @@
         if (ds[di]) { state.dayKey = ds[di]; render(); var dt = document.querySelector('.day-tab[aria-selected="true"]'); if (dt) dt.scrollIntoView({ block: 'nearest', inline: 'center' }); }
         break;
       case 'edit-day': openDayDialog(); break;
+      case 'cf-yes': cfFinish(true); break;
+      case 'cf-no': cfFinish(false); break;
       case 'open-ai': openAi(); break;
       case 'close-ai': aiDialog.close(); break;
       case 'ai-back':
