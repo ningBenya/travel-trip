@@ -621,3 +621,18 @@ h1,h2{margin:0}
   @keyframes cfup{from{transform:translateY(30%)}to{transform:none}}
 }
 @media (prefers-reduced-motion:reduce){.confirm-dialog[open]{animation:none}}
+
+/* ===== ฟอร์มแก้ไข/เพิ่มจุดแบบหน้าต่าง (จอคอม) ===== */
+.edit-dialog{width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 40px);max-height:calc(100dvh - 40px);overflow:hidden;padding:0}
+.edit-dialog[open]{display:flex;flex-direction:column;animation:cfin .16s ease-out}
+.edit-host{overflow-y:auto;overscroll-behavior:contain;padding:0 22px 0}
+.edit-host form{padding:0!important}
+.edit-dialog .form-title{position:sticky;top:0;z-index:2;background:#fff;padding:18px 0 10px;margin-bottom:-4px}
+.edit-dialog .form-title h2{font-size:19px}
+.edit-dialog .sheet-close{display:inline-flex!important;width:40px;height:40px}
+.edit-dialog .sheet-grab{display:none!important}
+.edit-dialog #itemSubmit{position:sticky;bottom:0;z-index:2;box-shadow:0 -10px 14px #fff,0 10px 0 #fff;margin-bottom:18px}
+.edit-dialog .row2.times{gap:8px}
+.form-ghost{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--line);border-radius:12px;color:var(--muted);font-size:14px}
+.form-ghost span{display:inline-flex;align-items:center;gap:8px}
+@media (prefers-reduced-motion:reduce){.edit-dialog[open]{animation:none}}

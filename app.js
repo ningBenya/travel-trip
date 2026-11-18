@@ -1059,9 +1059,10 @@
     form.hours.placeholder = d.cat === 'stay' ? 'เช่น เช็กอิน 14:00 · เช็กเอาต์ 11:00' : 'เช่น 10:00–18:00 (ปิดวันจันทร์)';
     form.name.placeholder = c.namePh;
     form.note.placeholder = c.notePh;
-    $('#itemFormTitle').textContent = editing ? 'แก้ไขรายการ' : 'เพิ่มรายการ';
+    $('#itemFormTitle').textContent = editing ? 'แก้ไขรายการ' : (d.fromPlan && d.date ? 'เพิ่มจุดแวะ · ' + fmtShort(d.date) : 'เพิ่มรายการ');
     $('#editBadge').hidden = !editing;
-    $('#itemCancel').hidden = !editing;
+    $('#itemCancel').hidden = !editing && !d.fromPlan;
+    $('#itemCancel').textContent = editing ? 'ยกเลิกการแก้ไข' : 'ยกเลิก';
     $('#itemSubmit').textContent = editing ? 'บันทึกการแก้ไข' : '+ เพิ่มเข้าทริป';
     var t = currentTrip();
     $('#mapSearch').href = gm(d.name || (t && t.destination) || '');
@@ -1120,6 +1121,7 @@
         render();
         toast(editId ? 'บันทึกการแก้ไขแล้ว' : 'เพิ่มรายการแล้ว');
         if (isMobile()) closeOverlays();
+        closeEditModal();
       });
     }).catch(function () { fail('บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'); })
       .then(function () { btn.disabled = false; updateFormChrome(); });
@@ -1137,6 +1139,33 @@
     });
   }
 
+  /* ===== ฟอร์มรายการแบบหน้าต่าง (จอคอม) =====
+   * ย้าย <form id="itemForm"> ตัวเดิมเข้าไปใน dialog ตอนแก้ไข/เพิ่มจุดจากแผน แล้วย้ายกลับเมื่อปิด */
+  var editDialog = $('#editDialog'), editGhost = null;
+  function openEditModal() {
+    if (isMobile()) { openSheet(); return; }
+    if (!editDialog.open) {
+      var card = $('#itemFormCard');
+      editGhost = document.createElement('div');
+      editGhost.className = 'form-ghost';
+      editGhost.style.height = form.offsetHeight + 'px';
+      editGhost.innerHTML = '<span>' + ICON.penS + 'กำลังแก้ไขในหน้าต่าง</span>';
+      card.appendChild(editGhost);
+      $('#editHost').appendChild(form);
+      if (typeof editDialog.showModal === 'function') editDialog.showModal(); else editDialog.setAttribute('open', '');
+    }
+    editDialog.scrollTop = 0; $('#editHost').scrollTop = 0;
+    setTimeout(function () { form.name.focus({ preventScroll: true }); }, 30);
+  }
+  function closeEditModal() { if (editDialog.open) editDialog.close(); }
+  editDialog.addEventListener('close', function () {
+    var card = $('#itemFormCard');
+    if (editGhost) { editGhost.remove(); editGhost = null; }
+    if (form.parentNode !== card) card.appendChild(form);
+    if (state.editingItemId || state.draft.fromPlan) { resetDraft(); render(); }
+  });
+  editDialog.addEventListener('click', function (e) { if (e.target === editDialog) closeEditModal(); });
+
   function startEditItem(id) {
     var t = currentTrip(), i = t && (state.db.items[t.id] || {})[id];
     if (!i) return;
@@ -1150,8 +1179,7 @@
     };
     fillForm();
     render();
-    if (isMobile()) openSheet();
-    else { if (window.matchMedia('(max-width: 900px)').matches) $('#itemFormCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); form.name.focus({ preventScroll: true }); }
+    openEditModal();
   }
 
   /* ===== กล่องยืนยัน (แทน confirm() ของเบราว์เซอร์) ===== */
@@ -1409,12 +1437,12 @@
         break;
       case 'close-day-dialog': dayDialog.close(); break;
       case 'add-stop':
-        resetDraft(); state.draft.date = el.dataset.day; if (state.draft.cat === 'travel') state.draft.cat = 'place'; fillForm();
+        resetDraft(); state.draft.date = el.dataset.day; if (state.draft.cat === 'travel') state.draft.cat = 'place'; state.draft.fromPlan = true; fillForm();
         render();
-        if (isMobile()) openSheet();
-        else { $('#itemFormCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); form.name.focus({ preventScroll: true }); }
+        openEditModal();
         break;
       case 'close-overlays':
+        if (editDialog.open) { closeEditModal(); break; }
         if (document.body.classList.contains('sheet-open') && state.editingItemId) { resetDraft(); render(); }
         closeOverlays(); break;
       case 'edit-trip': openTripDialog(currentTrip()); break;
@@ -1427,7 +1455,9 @@
       case 'filter': state.filter = el.dataset.cat; render(); break;
       case 'edit-item': startEditItem(el.dataset.id); break;
       case 'delete-item': deleteItem(el.dataset.id); break;
-      case 'cancel-edit': resetDraft(); render(); if (isMobile()) closeOverlays(); break;
+      case 'cancel-edit':
+        if (editDialog.open) { closeEditModal(); break; }
+        resetDraft(); render(); if (isMobile()) closeOverlays(); break;
       case 'pick-cat': state.draft.cat = el.dataset.cat; updateFormChrome(); break;
       case 'remove-draft-photo':
         var p = state.draft.photos.splice(Number(el.dataset.idx), 1)[0];
