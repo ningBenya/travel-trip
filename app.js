@@ -259,6 +259,9 @@
 
   /* ===== ข้อมูลที่คำนวณ ===== */
   function currentTrip() { return state.db.trips[state.selectedId] || null; }
+  function tripMembers(t) { return t && t.members ? Object.keys(t.members).filter(function (k) { return t.members[k]; }) : []; }
+  // เจ้าของทริปหรือ admin: เพิ่ม/เอาคนออก และลบทริปได้ (โหมดเก็บในเครื่องไม่มีระบบผู้ใช้ จึงทำได้ทุกอย่าง)
+  function canManage(t) { var me = state.me; return !me || me.isAdmin || (!!t && t.ownerId === me.uid); }
   function tripItems(id) {
     var o = state.db.items[id] || {};
     return Object.keys(o).map(function (k) { var i = o[k]; i.id = i.id || k; return i; });
@@ -961,7 +964,8 @@
   function heroMenu(t) {
     var items = (t.coverId ? '<button type="button" class="menu-item" role="menuitem" data-act="view-cover">' + ICON.zoom + 'ดูรูปปก</button>' +
       '<button type="button" class="menu-item" role="menuitem" data-act="remove-cover">' + ICON.imgOff + 'ลบรูปปก</button>' : '') +
-      '<button type="button" class="menu-item danger" role="menuitem" data-act="delete-trip">' + ICON.trashS + 'ลบทริปนี้…</button>';
+      (canManage(t) ? '<button type="button" class="menu-item danger" role="menuitem" data-act="delete-trip">' + ICON.trashS + 'ลบทริปนี้…</button>' : '');
+    if (!items) return '';
     if (!hasPopover) return items.replace(/class="menu-item( danger)?" role="menuitem"/g, function (m, d) { return 'class="btn-glass' + (d || '') + '"'; });
     return '<button type="button" class="btn-glass" popovertarget="heroMenu" aria-haspopup="menu" aria-label="ตัวเลือกเพิ่มเติม" title="ตัวเลือกเพิ่มเติม">' + ICON.dots + '<span class="lbl">เพิ่มเติม</span></button>' +
       '<div class="menu" id="heroMenu" popover role="menu" aria-label="ตัวเลือกเพิ่มเติมของทริป">' + items + '</div>';
@@ -1318,8 +1322,17 @@
         people: Math.max(parseInt(d.people, 10) || 1, 1), theme: d.theme, coverId: d.cover ? d.cover.id : '',
         createdAt: (old && old.createdAt) || Date.now(), updatedAt: Date.now()
       };
-      var oldCover = d.oldCover;
-      var u = {}; u['trips/' + id] = trip;
+      var oldCover = d.oldCover, u = {};
+      if (old) {
+        // แก้ทีละช่อง: สมาชิกที่ไม่ใช่เจ้าของเขียนทั้งก้อนไม่ได้ (กฎฐานข้อมูลกันไม่ให้แก้ ownerId/members)
+        ['name', 'destination', 'start', 'end', 'people', 'theme', 'coverId', 'updatedAt'].forEach(function (k) { u['trips/' + id + '/' + k] = trip[k]; });
+      } else {
+        if (state.me) {
+          trip.ownerId = state.me.uid; trip.members = {}; trip.members[state.me.uid] = true;
+          u['userTrips/' + state.me.uid + '/' + id] = true;
+        }
+        u['trips/' + id] = trip;
+      }
       return commit(u).then(function () {
         if (oldCover && oldCover !== trip.coverId) deletePhotos([oldCover]);
         closeTripDialog();
@@ -1332,7 +1345,7 @@
   tripDialog.addEventListener('close', function () { state.tripDraft = null; });
 
   function deleteTrip() {
-    var t = currentTrip(); if (!t) return;
+    var t = currentTrip(); if (!t || !canManage(t)) return;
     var items = tripItems(t.id);
     askConfirm({
       title: 'ลบทริปนี้?',
@@ -1348,7 +1361,9 @@
     var itemsCopy = JSON.parse(JSON.stringify(state.db.items[id] || {}));
     var photos = [t.coverId];
     items.forEach(function (i) { photos = photos.concat(arr(i.photoIds)); });
+    var members = tripMembers(t);
     var u = {}; u['trips/' + id] = null; u['items/' + id] = null;
+    members.forEach(function (m) { u['userTrips/' + m + '/' + id] = null; });
     state.selectedId = null;
     commit(u).then(function () {
       resetDraft(); render();
@@ -1356,6 +1371,7 @@
         undo: function () {
           var r = {}; r['trips/' + id] = tripCopy;
           if (Object.keys(itemsCopy).length) r['items/' + id] = itemsCopy;
+          members.forEach(function (m) { r['userTrips/' + m + '/' + id] = true; });
           commit(r).then(function () { selectTrip(id); toast('กู้คืนทริปแล้ว'); }).catch(function () {});
         },
         done: function () { deletePhotos(photos.filter(Boolean)); }
@@ -1625,13 +1641,59 @@
   }
 
   function startTrips() {
-    var gotTrips = false;
-    listen(ROOT + '/trips', function (snap) {
-      state.db.trips = snap.val() || {}; state.loaded = true;
-      if (!gotTrips) { gotTrips = true; ensureSelected(); resetDraft(); }
-      render();
+    var me = state.me, gotTrips = false;
+    var first = function () { if (!gotTrips) { gotTrips = true; ensureSelected(); resetDraft(); } };
+    if (me.isAdmin) {
+      listen(ROOT + '/trips', function (snap) {
+        state.db.trips = snap.val() || {}; state.loaded = true;
+        if (!gotTrips) claimOrphanTrips();
+        first(); render();
+      }, function () { setSync('err'); state.loaded = true; render(); });
+      listen(ROOT + '/items', function (snap) { state.db.items = snap.val() || {}; render(); });
+      return;
+    }
+    // ผู้ใช้ทั่วไป: ฟังดัชนีทริปของตัวเอง แล้วเปิด listener ทีละทริป
+    var open = {};
+    listen(ROOT + '/userTrips/' + me.uid, function (snap) {
+      var ids = snap.val() || {};
+      Object.keys(ids).forEach(function (id) {
+        if (open[id]) return;
+        open[id] = true;
+        listen(ROOT + '/trips/' + id, function (s) {
+          if (!s.exists()) { dropTrip(id); return; }
+          state.db.trips[id] = s.val(); render();
+        }, function () { dropTrip(id); });
+        listen(ROOT + '/items/' + id, function (s) { state.db.items[id] = s.val() || {}; render(); });
+      });
+      Object.keys(open).forEach(function (id) {
+        if (ids[id]) return;
+        delete open[id]; unlisten(ROOT + '/trips/' + id); unlisten(ROOT + '/items/' + id); dropTrip(id);
+      });
+      state.loaded = true; first(); render();
     }, function () { setSync('err'); state.loaded = true; render(); });
-    listen(ROOT + '/items', function (snap) { state.db.items = snap.val() || {}; render(); });
+  }
+  // ถูกเอาออกจากทริป หรือทริปถูกลบ: เอาออกจากหน้าจอเงียบ ๆ (ไม่ใช่ปัญหาการเชื่อมต่อ)
+  function dropTrip(id) {
+    if (!state.db.trips[id] && !state.db.items[id]) return;
+    var wasOpen = state.selectedId === id;
+    delete state.db.trips[id]; delete state.db.items[id];
+    if (wasOpen) {
+      state.selectedId = null; resetDraft();
+      closeOverlays(); [tripDialog, dayDialog, editDialog, aiDialog].forEach(function (d) { if (d.open) d.close(); });
+      toast('คุณไม่ได้อยู่ในทริปนี้แล้ว');
+      if (typeof go === 'function') go('#calendar');
+    }
+    render();
+  }
+  // admin login: ทริปเดิมที่ยังไม่มีเจ้าของ ให้เป็นของ admin
+  function claimOrphanTrips() {
+    var me = state.me, u = {};
+    Object.keys(state.db.trips).forEach(function (id) {
+      if (state.db.trips[id] && !state.db.trips[id].ownerId) {
+        u['trips/' + id + '/ownerId'] = me.uid; u['trips/' + id + '/members/' + me.uid] = true; u['userTrips/' + me.uid + '/' + id] = true;
+      }
+    });
+    if (Object.keys(u).length) fdb.ref(ROOT).update(u).catch(function () {});
   }
 
   function signOut(msg) {
