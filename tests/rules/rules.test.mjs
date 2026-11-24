@@ -132,8 +132,8 @@ test('admin can claim an ownerless trip and add any member', async () => {
 test('existing validation still applies', async () => {
   await assertFails(upd(as.alice, { 'items/t1/bad': { id: 'bad', cat: 'food', name: 'x', price: -5 } }));
   await assertFails(upd(as.alice, { 'trips/t1/name': '' }));
-  await assertFails(upd(as.alice, { 'thumbs/p2': 'not-an-image' }));
-  await assertSucceeds(upd(as.alice, { 'thumbs/p2': 'data:image/jpeg;base64,BB' }));
+  await assertFails(upd(as.alice, { 'thumbs/p2': 'not-an-image', 'photoTrip/p2': 't1' }));
+  await assertSucceeds(upd(as.alice, { 'thumbs/p2': 'data:image/jpeg;base64,BB', 'photoTrip/p2': 't1' }));
   await assertSucceeds(get(as.bob, 'thumbs/p1'));
 });
 
@@ -157,4 +157,58 @@ test('admin deactivates a user and takes over their trips', async () => {
     'trips/t1/members/alice': null, 'trips/t1/ownerId': 'adminUid', 'trips/t1/members/adminUid': true, 'userTrips/adminUid/t1': true
   }));
   await assertFails(get(as.alice, 'trips/t1'));
+});
+
+// ===== review fixes =====
+const memberBob = () => env.withSecurityRulesDisabled((ctx) => upd(ctx.database(), { 'trips/t1/members/bob': true, 'userTrips/bob/t1': true }));
+
+test('trip fields reject markup and wrong types', async () => {
+  await memberBob();
+  await assertFails(upd(as.bob, { 'trips/t1/people': '<img src=x onerror=alert(1)>' }));
+  await assertFails(upd(as.bob, { 'trips/t1/people': 0 }));
+  await assertSucceeds(upd(as.bob, { 'trips/t1/people': 4 }));
+  await assertFails(upd(as.bob, { 'trips/t1/start': 5 }));
+  await assertFails(upd(as.bob, { 'trips/t1/start': '"><img src=x>' }));
+  await assertSucceeds(upd(as.bob, { 'trips/t1/start': '2026-12-10', 'trips/t1/end': '' }));
+  await assertFails(upd(as.bob, { 'trips/t1/theme': '"><script>' }));
+  await assertSucceeds(upd(as.bob, { 'trips/t1/theme': 'sunset' }));
+  await assertFails(upd(as.bob, { 'trips/t1/coverId': 12 }));
+  await assertFails(upd(as.bob, { 'trips/t1/days/bad"key': { tagline: 'x' } }));
+  await assertSucceeds(upd(as.bob, { 'trips/t1/days/2026-12-10': { tagline: 'x', tips: ['a'] } }));
+});
+
+test('members cannot change a trip id', async () => {
+  await memberBob();
+  await assertFails(upd(as.bob, { 'trips/t1/id': 't2' }));
+  await assertSucceeds(upd(as.alice, { 'trips/t1/id': 't1' }));
+  await assertFails(upd(as.alice, { 'trips/t1/id': 'other' }));
+});
+
+test('item fields reject markup in date and qty', async () => {
+  await assertFails(upd(as.alice, { 'items/t1/i3': { id: 'i3', cat: 'food', name: 'x', price: 1, date: '"><img src=x onerror=alert(1)>' } }));
+  await assertFails(upd(as.alice, { 'items/t1/i3': { id: 'i3', cat: 'food', name: 'x', price: 1, qty: '<b>' } }));
+  await assertFails(upd(as.alice, { 'items/t1/i3': { id: 'i4', cat: 'food', name: 'x', price: 1 } }));
+  await assertSucceeds(upd(as.alice, { 'items/t1/i3': { id: 'i3', cat: 'food', name: 'x', price: 1, qty: 2, date: '2026-12-10', timeStart: '09:00' } }));
+});
+
+test('photos: only members of the owning trip can overwrite or delete', async () => {
+  await env.withSecurityRulesDisabled((ctx) => upd(ctx.database(), {
+    'trips/t9': { id: 't9', name: 'Bob only', ownerId: 'bob', members: { bob: true } }, 'userTrips/bob/t9': true,
+    'thumbs/pa': 'data:image/jpeg;base64,AA', 'photos/pa': 'data:image/jpeg;base64,AA', 'photoTrip/pa': 't1',
+    'thumbs/legacy': 'data:image/jpeg;base64,AA'
+  }));
+  // bob is not in t1: cannot touch its photo
+  await assertFails(upd(as.bob, { 'thumbs/pa': null }));
+  await assertFails(upd(as.bob, { 'photos/pa': 'data:image/jpeg;base64,ZZ' }));
+  await assertFails(upd(as.bob, { 'photoTrip/pa': 't9' }));
+  // legacy photo with no index: only admin
+  await assertFails(upd(as.alice, { 'thumbs/legacy': null }));
+  await assertSucceeds(upd(as.admin, { 'thumbs/legacy': null }));
+  // alice (member of t1) can delete it together with its index
+  await assertSucceeds(upd(as.alice, { 'thumbs/pa': null, 'photos/pa': null, 'photoTrip/pa': null }));
+  // anyone with a profile can add a new photo with its index
+  await assertSucceeds(upd(as.bob, { 'thumbs/pn': 'data:image/jpeg;base64,AA', 'photos/pn': 'data:image/jpeg;base64,AA', 'photoTrip/pn': 't9' }));
+  await assertFails(upd(as.bob, { 'thumbs/pz': 'data:image/jpeg;base64,AA' }));
+  await assertFails(upd(as.mallory, { 'thumbs/pm': 'data:image/jpeg;base64,AA', 'photoTrip/pm': 't9' }));
+  await assertSucceeds(get(as.bob, 'thumbs/p1'));
 });

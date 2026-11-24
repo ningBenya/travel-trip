@@ -194,10 +194,11 @@
     blobCache.set(key, p);
     return p;
   }
-  function putPhoto(p) {
+  function putPhoto(p, tripId) {
     blobCache.set('thumbs/' + p.id, p.thumb); blobCache.set('photos/' + p.id, p.full);
     if (fdb) {
-      var u = {}; u['thumbs/' + p.id] = p.thumb; u['photos/' + p.id] = p.full;
+      // photoTrip: รูปนี้เป็นของทริปไหน กฎฐานข้อมูลให้เฉพาะสมาชิกทริปนั้นแก้หรือลบรูปได้
+      var u = {}; u['thumbs/' + p.id] = p.thumb; u['photos/' + p.id] = p.full; u['photoTrip/' + p.id] = tripId;
       return fdb.ref(ROOT).update(u);
     }
     return Promise.all([idb.set('thumbs/' + p.id, p.thumb), idb.set('photos/' + p.id, p.full)]);
@@ -207,7 +208,7 @@
     if (!ids.length) return Promise.resolve();
     ids.forEach(function (id) { blobCache.delete('thumbs/' + id); blobCache.delete('photos/' + id); });
     if (fdb) {
-      var u = {}; ids.forEach(function (id) { u['thumbs/' + id] = null; u['photos/' + id] = null; });
+      var u = {}; ids.forEach(function (id) { u['thumbs/' + id] = null; u['photos/' + id] = null; u['photoTrip/' + id] = null; });
       return fdb.ref(ROOT).update(u).catch(function () {});
     }
     return Promise.all(ids.map(function (id) { return Promise.all([idb.del('thumbs/' + id), idb.del('photos/' + id)]); })).catch(function () {});
@@ -261,17 +262,17 @@
   }
 
   /* ===== ข้อมูลที่คำนวณ ===== */
-  function currentTrip() { return state.db.trips[state.selectedId] || null; }
+  function currentTrip() { var t = state.db.trips[state.selectedId] || null; if (t) t.id = state.selectedId; return t; }
   function tripMembers(t) { return t && t.members ? Object.keys(t.members).filter(function (k) { return t.members[k]; }) : []; }
   // เจ้าของทริปหรือ admin: เพิ่ม/เอาคนออก และลบทริปได้ (โหมดเก็บในเครื่องไม่มีระบบผู้ใช้ จึงทำได้ทุกอย่าง)
   function canManage(t) { var me = state.me; return !me || me.isAdmin || (!!t && t.ownerId === me.uid); }
   function tripItems(id) {
     var o = state.db.items[id] || {};
-    return Object.keys(o).map(function (k) { var i = o[k]; i.id = i.id || k; return i; });
+    return Object.keys(o).map(function (k) { var i = o[k]; i.id = k; return i; });
   }
   function tripTotal(id) { return tripItems(id).reduce(function (s, i) { return s + lineTotal(i); }, 0); }
   function sortedTrips() {
-    return Object.keys(state.db.trips).map(function (k) { var t = state.db.trips[k]; t.id = t.id || k; return t; })
+    return Object.keys(state.db.trips).map(function (k) { var t = state.db.trips[k]; if (t) t.id = k; return t; }).filter(Boolean)
       .sort(function (a, b) {
         var x = a.start || '9999', y = b.start || '9999';
         return x === y ? (b.createdAt || 0) - (a.createdAt || 0) : y.localeCompare(x);
@@ -303,12 +304,14 @@
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function isoDate(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function timeRange(i) { return i.timeStart ? i.timeStart + (i.timeEnd ? ' – ' + i.timeEnd : '') : ''; }
+  function isIsoDay(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
   function tripDays(t) {
     var out = [], seen = {}, a = toDate(t.start), b = toDate(t.end || t.start);
     if (a && b && !isNaN(a) && !isNaN(b) && b >= a) {
       for (var d = new Date(a); d <= b && out.length < 90; d.setDate(d.getDate() + 1)) { var k = isoDate(d); seen[k] = 1; out.push(k); }
     }
-    tripItems(t.id).forEach(function (i) { if (i.date && !seen[i.date]) { seen[i.date] = 1; out.push(i.date); } });
+    // วันที่จากรายการต้องเป็นรูปแบบ YYYY-MM-DD เท่านั้น (ข้อมูลแปลก ๆ จะไม่ถูกนำมาแสดง)
+    tripItems(t.id).forEach(function (i) { if (isIsoDay(i.date) && !seen[i.date]) { seen[i.date] = 1; out.push(i.date); } });
     return out.sort();
   }
   function dayItems(t, key) {
@@ -348,7 +351,7 @@
     var tips = arr(info.tips), total = items.reduce(function (s, i) { return s + lineTotal(i); }, 0);
     var color = themeColor(t.theme);
     var chips = '<div class="day-tabs" role="tablist" aria-label="เลือกวัน">' + days.map(function (k, n) {
-      return '<button type="button" class="day-tab" role="tab" data-act="pick-day" data-day="' + k + '" aria-selected="' + (k === key) + '"><b>Day ' + (n + 1) + '</b><span>' + fmtShort(k) + '</span></button>';
+      return '<button type="button" class="day-tab" role="tab" data-act="pick-day" data-day="' + esc(k) + '" aria-selected="' + (k === key) + '"><b>Day ' + (n + 1) + '</b><span>' + fmtShort(k) + '</span></button>';
     }).join('') + '</div>';
     chips = '<div class="day-tabs-row">' + chips + '<div class="plan-tools"><button type="button" class="btn-ai" data-act="open-ai">' + ICON.spark + 'ให้ AI ช่วยจัดแพลน</button>' +
       '<button type="button" class="btn-secondary small-btn export-all" data-act="export-all">' + ICON.download + 'บันทึกทุกวันเป็นรูป</button></div></div>';
@@ -363,7 +366,7 @@
       '<span class="day-bar-actions">' +
       '<button type="button" class="btn-glass" data-act="day-step" data-dir="-1" aria-label="วันก่อนหน้า"' + (idx === 0 ? ' disabled' : '') + '>' + ICON.chevL + '</button>' +
       '<button type="button" class="btn-glass" data-act="edit-day" aria-label="แก้ไขคำโปรยและเคล็ดลับของวันนี้">' + ICON.penS + '<span class="lbl">ข้อมูลวัน</span></button>' +
-      '<button type="button" class="btn-glass" data-act="add-stop" data-day="' + key + '">' + ICON.plus + '<span class="lbl">เพิ่มจุด</span></button>' +
+      '<button type="button" class="btn-glass" data-act="add-stop" data-day="' + esc(key) + '">' + ICON.plus + '<span class="lbl">เพิ่มจุด</span></button>' +
       '<button type="button" class="btn-glass" data-act="export-day" aria-label="บันทึกแผนวันนี้เป็นรูป" title="บันทึกแผนวันนี้เป็นรูป">' + ICON.download + '<span class="lbl">บันทึกรูป</span></button>' +
       '<button type="button" class="btn-glass" data-act="day-step" data-dir="1" aria-label="วันถัดไป"' + (idx === days.length - 1 ? ' disabled' : '') + '>' + ICON.chevR + '</button>' +
       '</span></div></section>';
@@ -373,7 +376,7 @@
       var facts = [];
       if (i.address) facts.push('<li>' + ICON.pin + '<span><b>ที่อยู่:</b> ' + esc(i.address) + '</span></li>');
       if (i.hours) facts.push('<li>' + (i.cat === 'stay' ? ICON.home : ICON.clock) + '<span><b>' + (i.cat === 'stay' ? 'เช็กอิน/เอาต์' : 'เวลาเปิด') + ':</b> ' + esc(i.hours) + '</span></li>');
-      facts.push('<li>' + ICON.coin + '<span><b>ค่าใช้จ่าย:</b> ' + (lineTotal(i) > 0 ? money(lineTotal(i)) + ((Number(i.qty) || 1) > 1 ? ' <span class="muted">(' + money(i.price) + ' × ' + i.qty + ')</span>' : '') : 'ไม่มี / ยังไม่ระบุ') + '</span></li>');
+      facts.push('<li>' + ICON.coin + '<span><b>ค่าใช้จ่าย:</b> ' + (lineTotal(i) > 0 ? money(lineTotal(i)) + ((Number(i.qty) || 1) > 1 ? ' <span class="muted">(' + money(i.price) + ' × ' + (Number(i.qty) || 1) + ')</span>' : '') : 'ไม่มี / ยังไม่ระบุ') + '</span></li>');
       if (i.phone) facts.push('<li>' + ICON.phone + '<span>' + (tel ? '<a href="tel:' + esc(tel) + '">' + esc(i.phone) + '</a>' : esc(i.phone)) + '</span></li>');
       if (map) facts.push('<li>' + ICON.pin + '<span><a href="' + esc(map) + '" target="_blank" rel="noopener">เปิดใน Google Maps</a></span></li>');
       return '<li class="stop' + (state.editingItemId === i.id ? ' editing' : '') + '" style="--c:' + c.color + ';--cbg:' + c.bg + '">' +
@@ -393,7 +396,7 @@
         '</div></li>';
     }).join('') + '</ol>'
       : '<div class="card plan-empty"><b>ยังไม่มีจุดแวะในวันนี้</b><span class="muted">กด "เพิ่มจุด" แล้วใส่เวลา ชื่อสถานที่ และรายละเอียด</span>' +
-        '<button type="button" class="btn-primary" data-act="add-stop" data-day="' + key + '">' + ICON.plus + 'เพิ่มจุดแรกของวัน</button></div>';
+        '<button type="button" class="btn-primary" data-act="add-stop" data-day="' + esc(key) + '">' + ICON.plus + 'เพิ่มจุดแรกของวัน</button></div>';
 
     var overview = items.length > 1 ? '<section class="card route-card"><h3>' + ICON.car + 'เส้นทางโดยรวม <span class="muted small">(เวลาโดยประมาณ)</span></h3><div class="route">' +
       items.map(function (i, n) {
@@ -539,7 +542,7 @@
       var facts = [];
       if (i.address) facts.push('<li>' + ICON.pin + '<span><b>ที่อยู่:</b> ' + esc(i.address) + '</span></li>');
       if (i.hours) facts.push('<li>' + (i.cat === 'stay' ? ICON.home : ICON.clock) + '<span><b>' + (i.cat === 'stay' ? 'เช็กอิน/เอาต์' : 'เวลาเปิด') + ':</b> ' + esc(i.hours) + '</span></li>');
-      if (lineTotal(i) > 0) facts.push('<li>' + ICON.coin + '<span><b>ค่าใช้จ่าย:</b> ' + money(lineTotal(i)) + ((Number(i.qty) || 1) > 1 ? ' (' + money(i.price) + ' × ' + i.qty + ')' : '') + '</span></li>');
+      if (lineTotal(i) > 0) facts.push('<li>' + ICON.coin + '<span><b>ค่าใช้จ่าย:</b> ' + money(lineTotal(i)) + ((Number(i.qty) || 1) > 1 ? ' (' + money(i.price) + ' × ' + (Number(i.qty) || 1) + ')' : '') + '</span></li>');
       if (i.phone) facts.push('<li>' + ICON.phone + '<span>' + esc(i.phone) + '</span></li>');
       h += '<div class="ex-stop' + (src ? '' : ' no-photo') + '" style="--c:' + c.color + ';--cbg:' + c.bg + '">' +
         '<div class="ex-time"><span class="ex-ic">' + ICON['c_' + c.key] + '</span><div><b>' + (i.timeStart ? esc(i.timeStart) + (i.timeEnd ? '' : ' น.') : '—') + '</b>' +
@@ -987,14 +990,23 @@
   }
 
   // สร้างบัญชีผ่าน Firebase app ตัวที่สอง เพื่อไม่ให้ admin หลุดจากระบบ
+  // คืน { uid, finish(ok) }: เรียก finish(false) ถ้าบันทึกโปรไฟล์ไม่สำเร็จ เพื่อลบบัญชีที่เพิ่งสร้างทิ้ง
   function createAuthAccount(email, password) {
     var sec = firebase.initializeApp(window.FIREBASE_CONFIG, 'admin-create-' + Date.now());
     var a = sec.auth();
     if (EMU) a.useEmulator('http://127.0.0.1:9099');
-    return a.createUserWithEmailAndPassword(email, password).then(function (cred) {
-      var uid = cred.user.uid;
-      return a.signOut().then(function () { return sec.delete(); }).then(function () { return uid; });
-    }, function (err) { return sec.delete().then(function () { throw err; }, function () { throw err; }); });
+    var drop = function () { return sec.delete().catch(function () {}); };
+    return a.setPersistence(firebase.auth.Auth.Persistence.NONE)
+      .then(function () { return a.createUserWithEmailAndPassword(email, password); })
+      .then(function (cred) {
+        return {
+          uid: cred.user.uid,
+          finish: function (ok) {
+            var undo = ok ? Promise.resolve() : cred.user.delete().catch(function () {});
+            return undo.then(function () { return a.signOut().catch(function () {}); }).then(drop);
+          }
+        };
+      }, function (err) { return drop().then(function () { throw err; }); });
   }
 
   $('#newUserForm').addEventListener('submit', function (e) {
@@ -1019,8 +1031,8 @@
       }).then(function (ok) { if (!ok) throw { code: 'cancel' }; return oldUid; });
     }).then(function (oldUid) {
       b.disabled = true; b.textContent = 'กำลังสร้าง…';
-      return createAuthAccount(TripCore.usernameToEmail(uname), pw).then(function (uid) {
-        var u = {};
+      return createAuthAccount(TripCore.usernameToEmail(uname), pw).then(function (acct) {
+        var uid = acct.uid, u = {};
         u['users/' + uid] = { username: uname, name: name, createdAt: Date.now() };
         u['usernames/' + uname] = uid;
         if (oldUid && oldUid !== uid) {
@@ -1032,8 +1044,12 @@
           u['userTrips/' + oldUid] = null; u['users/' + oldUid] = null;
         }
         return fdb.ref(ROOT).update(u).then(function () {
-          f.reset();
-          toast(oldUid ? 'สร้างบัญชี @' + uname + ' แทนบัญชีเดิมแล้ว' : 'สร้างบัญชี @' + uname + ' แล้ว');
+          return acct.finish(true).then(function () {
+            f.reset();
+            toast(oldUid ? 'สร้างบัญชี @' + uname + ' แทนบัญชีเดิมแล้ว' : 'สร้างบัญชี @' + uname + ' แล้ว');
+          });
+        }, function () {
+          return acct.finish(false).then(function () { throw { code: 'db-failed' }; });
         });
       });
     }).catch(function (x) {
@@ -1166,8 +1182,8 @@
     var d = new Date(); return { y: d.getFullYear(), m: d.getMonth() };
   }
   function tripRange(t) {
-    if (!t.start) return 'ยังไม่ระบุวัน';
-    var e = t.end && t.end >= t.start ? t.end : t.start;
+    if (!isIsoDay(t.start)) return 'ยังไม่ระบุวัน';
+    var e = isIsoDay(t.end) && t.end >= t.start ? t.end : t.start;
     return e === t.start ? fmtLong(t.start) : fmtShort(t.start) + ' – ' + fmtLong(e);
   }
   function renderCalendar(trips) {
@@ -1204,8 +1220,8 @@
         return '<div class="cal-week" style="--lanes:' + w.laneCount + '">' + cells + bars + '</div>';
       }).join('') + '</div>';
     var inMonth = trips.filter(function (t) {
-      if (!t.start) return false;
-      var e = t.end && t.end >= t.start ? t.end : t.start;
+      if (!isIsoDay(t.start)) return false;
+      var e = isIsoDay(t.end) && t.end >= t.start ? t.end : t.start;
       return t.start.slice(0, 7) <= mKey && e.slice(0, 7) >= mKey;
     }).sort(function (a, b) { return a.start.localeCompare(b.start); });
     var row = function (t) {
@@ -1274,7 +1290,7 @@
       '<div class="hero-meta">' +
       '<span>' + ICON.cal + (t.start ? fmtLong(t.start) + ' – ' + fmtLong(t.end || t.start) : 'ยังไม่ระบุวัน') + '</span>' +
       '<span>' + ICON.clock + days + ' วัน ' + nights + ' คืน</span>' +
-      '<span>' + ICON.people + (t.people || 1) + ' คน</span>' +
+      '<span>' + ICON.people + (Math.max(parseInt(t.people, 10) || 1, 1)) + ' คน</span>' +
       (state.me ? '<button type="button" class="hero-members" data-act="open-members" aria-label="' + esc('สมาชิกทริป ' + tripMembers(t).length + ' คน') + '">' +
         tripMembers(t).slice(0, 4).map(function (uid) { return avatar(uid); }).join('') +
         '<span>สมาชิก ' + tripMembers(t).length + ' คน</span></button>' : '') +
@@ -1334,7 +1350,7 @@
             return '<button type="button" class="thumb-btn" data-act="open-photo" data-id="' + esc(i.id) + '" data-idx="' + n + '" aria-label="' + esc('ขยายรูปที่ ' + (n + 1) + ' ของ ' + i.name) + '"><img data-thumb="' + esc(pid) + '" alt=""></button>';
           }).join('') + '</div>' : '') +
           '</div>' +
-          '<div class="item-price"><b>' + money(lineTotal(i)) + '</b><span>' + ((Number(i.qty) || 1) > 1 ? money(i.price) + ' × ' + i.qty : '') + '</span></div>' +
+          '<div class="item-price"><b>' + money(lineTotal(i)) + '</b><span>' + ((Number(i.qty) || 1) > 1 ? money(i.price) + ' × ' + (Number(i.qty) || 1) : '') + '</span></div>' +
           '<div class="item-actions">' +
           '<button type="button" class="icon-btn" data-act="edit-item" data-id="' + esc(i.id) + '" aria-label="' + esc('แก้ไข ' + i.name) + '">' + ICON.pen + '</button>' +
           '<button type="button" class="icon-btn" data-act="delete-item" data-id="' + esc(i.id) + '" aria-label="' + esc('ลบ ' + i.name) + '">' + ICON.trash + '</button>' +
@@ -1419,7 +1435,7 @@
     var btn = $('#itemSubmit'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
     var editId = state.editingItemId, old = editId ? (state.db.items[t.id] || {})[editId] : null;
     var fresh = d.photos.filter(function (p) { return p.isNew; });
-    Promise.all(fresh.map(putPhoto)).then(function () {
+    Promise.all(fresh.map(function (p) { return putPhoto(p, t.id); })).then(function () {
       var id = editId || uid('i');
       var item = {
         id: id, cat: d.cat, name: d.name.trim(), date: d.date || '', price: parseFloat(d.price) || 0,
@@ -1594,8 +1610,8 @@
     if (d.pending) return fail('รอให้ย่อรูปเสร็จก่อน');
     var btn = $('#tripSubmit'); btn.disabled = true;
     var old = d.id ? state.db.trips[d.id] : null;
-    (d.cover && d.cover.isNew ? putPhoto(d.cover) : Promise.resolve()).then(function () {
-      var id = d.id || uid('t');
+    var id = d.id || uid('t');
+    (d.cover && d.cover.isNew ? putPhoto(d.cover, id) : Promise.resolve()).then(function () {
       var trip = {
         id: id, name: d.name.trim(), destination: d.destination.trim(), start: d.start || '', end: d.end || d.start || '',
         people: Math.max(parseInt(d.people, 10) || 1, 1), theme: d.theme, coverId: d.cover ? d.cover.id : '',
@@ -1661,7 +1677,7 @@
     var t = currentTrip(); if (!t || !file) return;
     toast('กำลังอัปโหลดรูปปก…');
     processFile(file).then(function (p) {
-      return putPhoto(p).then(function () {
+      return putPhoto(p, t.id).then(function () {
         var old = t.coverId, u = {};
         u['trips/' + t.id + '/coverId'] = p.id; u['trips/' + t.id + '/updatedAt'] = Date.now();
         return commit(u).then(function () { if (old) deletePhotos([old]); toast('เปลี่ยนรูปปกแล้ว'); });
@@ -1943,7 +1959,11 @@
         if (!gotTrips) claimOrphanTrips();
         first(); render();
       }, function () { setSync('err'); state.loaded = true; render(); });
-      listen(ROOT + '/items', function (snap) { state.db.items = snap.val() || {}; render(); });
+      var gotItems = false;
+      listen(ROOT + '/items', function (snap) {
+        state.db.items = snap.val() || {}; render();
+        if (!gotItems) { gotItems = true; backfillPhotoTrips(); }
+      });
       return;
     }
     // ผู้ใช้ทั่วไป: ฟังดัชนีทริปของตัวเอง แล้วเปิด listener ทีละทริป
@@ -1991,6 +2011,19 @@
       }
     });
     if (Object.keys(u).length) fdb.ref(ROOT).update(u).catch(function () {});
+  }
+  // รูปที่อัปโหลดก่อนมีระบบสิทธิ์ยังไม่รู้ว่าเป็นของทริปไหน: admin ใส่ให้ครั้งเดียว
+  function backfillPhotoTrips() {
+    fdb.ref(ROOT + '/photoTrip').once('value').then(function (snap) {
+      var have = snap.val() || {}, u = {};
+      Object.keys(state.db.trips).forEach(function (tid) {
+        var t = state.db.trips[tid] || {}, ids = [t.coverId];
+        var items = state.db.items[tid] || {};
+        Object.keys(items).forEach(function (k) { ids = ids.concat(arr(items[k] && items[k].photoIds)); });
+        ids.forEach(function (pid) { if (pid && typeof pid === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(pid) && !have[pid]) u['photoTrip/' + pid] = tid; });
+      });
+      if (Object.keys(u).length) return fdb.ref(ROOT).update(u);
+    }).catch(function () {});
   }
 
   function signOut(msg) {

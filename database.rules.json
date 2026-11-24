@@ -15,14 +15,16 @@
       "usernames": {
         ".read": "auth != null && (root.child('planner/users/' + auth.uid).exists() || auth.token.email == 'hwangning@travel.local')",
         ".write": "auth != null && auth.token.email == 'hwangning@travel.local'",
-        "$name": { ".validate": "newData.isString() && $name.matches(/^[a-z0-9._-]{3,30}$/)" }
+        "$name": {
+          ".validate": "newData.isString() && $name.matches(/^[a-z0-9._-]{3,30}$/)"
+        }
       },
       "trips": {
         ".read": "auth != null && auth.token.email == 'hwangning@travel.local'",
         "$t": {
           ".read": "auth != null && (auth.token.email == 'hwangning@travel.local' || data.child('members/' + auth.uid).exists())",
           ".write": "auth != null && (auth.token.email == 'hwangning@travel.local' || (root.child('planner/users/' + auth.uid).exists() && ((!data.exists() && newData.child('ownerId').val() == auth.uid && newData.child('members/' + auth.uid).val() == true) || data.child('ownerId').val() == auth.uid)))",
-          ".validate": "newData.hasChildren(['name']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 200 && (newData.hasChild('ownerId') || auth.token.email == 'hwangning@travel.local') && (!newData.hasChild('ownerId') || newData.child('members/' + newData.child('ownerId').val()).val() == true)",
+          ".validate": "newData.hasChildren(['name']) && (newData.hasChild('ownerId') || auth.token.email == 'hwangning@travel.local') && (!newData.hasChild('ownerId') || newData.child('members/' + newData.child('ownerId').val()).val() == true)",
           "ownerId": {
             ".validate": "newData.isString() && (newData.val() == data.val() || (!data.exists() && newData.val() == auth.uid) || auth.token.email == 'hwangning@travel.local')"
           },
@@ -32,17 +34,59 @@
               ".validate": "newData.val() == true && newData.parent().parent().parent().parent().child('users/' + $uid).exists()"
             }
           },
-          "id": { ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()" },
-          "name": { ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()" },
-          "destination": { ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()" },
-          "start": { ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()" },
-          "end": { ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()" },
-          "people": { ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()" },
-          "theme": { ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()" },
-          "coverId": { ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()" },
-          "createdAt": { ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()" },
-          "updatedAt": { ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()" },
-          "days": { ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()" }
+          "id": {
+            ".validate": "newData.val() == $t"
+          },
+          "name": {
+            ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()",
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200"
+          },
+          "destination": {
+            ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()",
+            ".validate": "newData.isString() && newData.val().length <= 200"
+          },
+          "start": {
+            ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()",
+            ".validate": "newData.isString() && (newData.val() == '' || newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/))"
+          },
+          "end": {
+            ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()",
+            ".validate": "newData.isString() && (newData.val() == '' || newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/))"
+          },
+          "people": {
+            ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()",
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 999"
+          },
+          "theme": {
+            ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()",
+            ".validate": "newData.isString() && newData.val().matches(/^[a-z]{1,20}$/)"
+          },
+          "coverId": {
+            ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()",
+            ".validate": "newData.isString() && (newData.val() == '' || newData.val().matches(/^[A-Za-z0-9_-]{1,64}$/))"
+          },
+          "createdAt": {
+            ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()",
+            ".validate": "newData.isNumber()"
+          },
+          "updatedAt": {
+            ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()",
+            ".validate": "newData.isNumber()"
+          },
+          "days": {
+            ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()",
+            "$d": {
+              ".validate": "$d.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+              "tagline": {
+                ".validate": "newData.isString() && newData.val().length <= 300"
+              },
+              "tips": {
+                "$n": {
+                  ".validate": "newData.isString() && newData.val().length <= 300"
+                }
+              }
+            }
+          }
         }
       },
       "userTrips": {
@@ -61,21 +105,49 @@
           ".read": "auth != null && (auth.token.email == 'hwangning@travel.local' || root.child('planner/trips/' + $t + '/members/' + auth.uid).exists())",
           ".write": "auth != null && (auth.token.email == 'hwangning@travel.local' || root.child('planner/trips/' + $t + '/members/' + auth.uid).exists() || newData.parent().parent().child('trips/' + $t + '/members/' + auth.uid).val() == true)",
           "$itemId": {
-            ".validate": "newData.hasChildren(['cat', 'name', 'price']) && newData.child('name').isString() && newData.child('price').isNumber() && newData.child('price').val() >= 0"
+            ".validate": "newData.hasChildren(['cat', 'name', 'price']) && newData.child('name').isString() && newData.child('price').isNumber() && newData.child('price').val() >= 0 && (!newData.hasChild('id') || newData.child('id').val() == $itemId)",
+            "cat": {
+              ".validate": "newData.isString() && newData.val().matches(/^[a-z]{1,20}$/)"
+            },
+            "date": {
+              ".validate": "newData.isString() && (newData.val() == '' || newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/))"
+            },
+            "qty": {
+              ".validate": "newData.isNumber() && newData.val() >= 1"
+            },
+            "timeStart": {
+              ".validate": "newData.isString() && (newData.val() == '' || newData.val().matches(/^[0-9]{2}:[0-9]{2}$/))"
+            },
+            "timeEnd": {
+              ".validate": "newData.isString() && (newData.val() == '' || newData.val().matches(/^[0-9]{2}:[0-9]{2}$/))"
+            },
+            "photoIds": {
+              "$n": {
+                ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,64}$/)"
+              }
+            }
           }
+        }
+      },
+      "photoTrip": {
+        ".read": "auth != null && auth.token.email == 'hwangning@travel.local'",
+        "$photoId": {
+          ".read": "auth != null && (root.child('planner/users/' + auth.uid).exists() || auth.token.email == 'hwangning@travel.local')",
+          ".write": "auth != null && (auth.token.email == 'hwangning@travel.local' || (root.child('planner/users/' + auth.uid).exists() && ((!data.exists() && newData.exists()) || (data.exists() && !newData.exists() && root.child('planner/trips/' + data.val() + '/members/' + auth.uid).exists()))))",
+          ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,64}$/)"
         }
       },
       "thumbs": {
         "$photoId": {
           ".read": "auth != null && (root.child('planner/users/' + auth.uid).exists() || auth.token.email == 'hwangning@travel.local')",
-          ".write": "auth != null && (root.child('planner/users/' + auth.uid).exists() || auth.token.email == 'hwangning@travel.local')",
+          ".write": "auth != null && (auth.token.email == 'hwangning@travel.local' || (root.child('planner/users/' + auth.uid).exists() && ((!data.exists() && newData.exists() && newData.parent().parent().child('photoTrip/' + $photoId).exists()) || (data.exists() && root.child('planner/trips/' + root.child('planner/photoTrip/' + $photoId).val() + '/members/' + auth.uid).exists()))))",
           ".validate": "newData.isString() && newData.val().beginsWith('data:image/') && newData.val().length < 300000"
         }
       },
       "photos": {
         "$photoId": {
           ".read": "auth != null && (root.child('planner/users/' + auth.uid).exists() || auth.token.email == 'hwangning@travel.local')",
-          ".write": "auth != null && (root.child('planner/users/' + auth.uid).exists() || auth.token.email == 'hwangning@travel.local')",
+          ".write": "auth != null && (auth.token.email == 'hwangning@travel.local' || (root.child('planner/users/' + auth.uid).exists() && ((!data.exists() && newData.exists() && newData.parent().parent().child('photoTrip/' + $photoId).exists()) || (data.exists() && root.child('planner/trips/' + root.child('planner/photoTrip/' + $photoId).val() + '/members/' + auth.uid).exists()))))",
           ".validate": "newData.isString() && newData.val().beginsWith('data:image/') && newData.val().length < 3000000"
         }
       }
