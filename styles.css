@@ -748,3 +748,25 @@ body:not([data-auth="in"]):not([data-auth="local"]) .fab{display:none!important}
   .cal-bar{padding:0 4px;font-size:11px;margin:0 1px}
   .cal-bar.s{margin-left:2px}.cal-bar.e{margin-right:2px}
 }
+
+/* ===== สมาชิกทริป ===== */
+.hero-members{display:inline-flex;align-items:center;gap:0;min-height:36px;padding:2px 12px 2px 4px;border:none;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;font:inherit;font-size:14px;cursor:pointer}
+.hero-members:hover{background:rgba(255,255,255,.26)}
+.hero-members:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.hero-members .avatar{margin-right:-6px;box-shadow:0 0 0 2px rgba(0,0,0,.25)}
+.hero-members > span:last-child{margin-left:14px}
+.avatar{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#E4E9F2;color:#1E3A66;font-size:14px;font-weight:700}
+.members-dialog{width:min(480px,calc(100vw - 32px))}
+.mem-wrap{display:flex;flex-direction:column;gap:14px;padding:20px;max-height:calc(100vh - 72px);overflow-y:auto}
+.mem-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.mem-row{display:flex;align-items:center;gap:12px;min-height:56px;padding:6px 0;border-top:1px solid var(--line-soft)}
+.mem-row:first-child{border-top:none}
+.mem-text{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+.mem-text b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mem-badge{font-size:12px;font-weight:600;color:var(--accent);background:#E3F1EE;border-radius:999px;padding:2px 10px}
+.mem-add{display:flex;flex-direction:column;gap:6px;padding-top:12px;border-top:1px solid var(--line)}
+.mem-add[hidden]{display:none}
+.mem-results{max-height:280px;overflow-y:auto}
+.mem-empty{padding:10px 0}
+.mem-note{margin:0}
+@media (max-width:760px){.members-dialog{width:100%;max-width:100%;margin:auto 0 0;border-radius:20px 20px 0 0}.mem-wrap{padding:18px 16px calc(18px + env(safe-area-inset-bottom))}}

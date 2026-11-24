@@ -953,6 +953,7 @@
     $('#topTitle').textContent = trip ? trip.name : ({ calendar: 'ปฏิทินทริป', account: 'เปลี่ยนรหัสผ่าน', users: 'จัดการผู้ใช้' }[r] || 'ทริปของฉัน');
     $('#fab').hidden = !trip;
     if (r === 'calendar') renderCalendar(trips);
+    if (membersDialog.open && !trip) membersDialog.close(); else if (membersDialog.open) renderMembers();
     if (r === 'users' && typeof renderUsers === 'function') renderUsers();
     if (!trip) { if (r === 'trip') $('#topTitle').textContent = 'กำลังโหลด…'; hydrate(); return; }
     if (state.editingItemId && !(state.db.items[trip.id] || {})[state.editingItemId]) resetDraft();
@@ -963,6 +964,78 @@
     $('#summary').hidden = plan; $('#share').hidden = plan; $('#costList').hidden = plan; $('#planView').hidden = !plan;
     if (plan) renderPlan(trip); else { renderSummary(trip); renderList(trip); }
     hydrate();
+  }
+
+  /* ===== สมาชิกทริป ===== */
+  var membersDialog = $('#membersDialog');
+  function userName(uid) { var u = state.db.users[uid]; return u ? (u.name || u.username) : 'ผู้ใช้ที่ถูกปิดบัญชี'; }
+  function avatar(uid) {
+    var n = userName(uid), ch = Array.from(n.trim())[0] || '?';
+    return '<span class="avatar" aria-hidden="true" title="' + esc(n) + '">' + esc(ch.toUpperCase()) + '</span>';
+  }
+  function openMembers() {
+    if (!currentTrip()) return;
+    $('#memSearch').value = '';
+    if (typeof membersDialog.showModal === 'function') membersDialog.showModal(); else membersDialog.setAttribute('open', '');
+    renderMembers();
+  }
+  function renderMembers() {
+    var t = currentTrip(); if (!t || !membersDialog.open) return;
+    var mine = tripMembers(t), manage = canManage(t);
+    mine.sort(function (a, b) { return a === t.ownerId ? -1 : b === t.ownerId ? 1 : userName(a).localeCompare(userName(b), 'th'); });
+    $('#memList').innerHTML = mine.map(function (uid) {
+      var u = state.db.users[uid] || {}, me = state.me && uid === state.me.uid;
+      return '<li class="mem-row">' + avatar(uid) + '<span class="mem-text"><b>' + esc(userName(uid)) + (me ? ' (คุณ)' : '') + '</b>' +
+        '<span class="muted small">' + (u.username ? '@' + esc(u.username) : '') + '</span></span>' +
+        (uid === t.ownerId ? '<span class="mem-badge">เจ้าของ</span>'
+          : (manage ? '<button type="button" class="btn-secondary small-btn" data-act="remove-member" data-uid="' + esc(uid) + '">เอาออก</button>' : '')) +
+        '</li>';
+    }).join('');
+    $('#memAdd').hidden = !manage; $('#memNote').hidden = manage;
+    if (!manage) return;
+    var raw = $('#memSearch').value.trim(), q = raw.toLowerCase();
+    var cands = Object.keys(state.db.users).filter(function (uid) {
+      if (t.members && t.members[uid]) return false;
+      var u = state.db.users[uid];
+      return !q || (u.username || '').indexOf(q) >= 0 || (u.name || '').toLowerCase().indexOf(q) >= 0;
+    }).sort(function (a, b) { return userName(a).localeCompare(userName(b), 'th'); });
+    $('#memResults').innerHTML = cands.length ? cands.slice(0, 30).map(function (uid) {
+      var u = state.db.users[uid];
+      return '<li class="mem-row">' + avatar(uid) + '<span class="mem-text"><b>' + esc(userName(uid)) + '</b><span class="muted small">@' + esc(u.username) + '</span></span>' +
+        '<button type="button" class="btn-primary small-btn" data-act="add-member" data-uid="' + esc(uid) + '">เพิ่ม</button></li>';
+    }).join('') : '<li class="muted small mem-empty">' + (q ? 'ไม่พบผู้ใช้ที่ตรงกับ “' + esc(raw) + '”' : 'ทุกคนในระบบอยู่ในทริปนี้แล้ว') + '</li>';
+  }
+  $('#memSearch').addEventListener('input', renderMembers);
+  function memberPaths(t, uid, on) {
+    var u = {};
+    u['trips/' + t.id + '/members/' + uid] = on ? true : null;
+    u['userTrips/' + uid + '/' + t.id] = on ? true : null;
+    return u;
+  }
+  function addMember(t, uid) {
+    if (!t || !uid || !canManage(t)) return;
+    commit(memberPaths(t, uid, true)).then(function () { toast('เพิ่ม ' + userName(uid) + ' เข้าทริปแล้ว'); renderMembers(); }).catch(function () {});
+  }
+  function removeMember(t, uid) {
+    if (!t || !uid || uid === t.ownerId || !canManage(t)) return;
+    var name = userName(uid);
+    commit(memberPaths(t, uid, false)).then(function () {
+      renderMembers();
+      toast('เอา ' + name + ' ออกจากทริปแล้ว', { undo: function () { commit(memberPaths(t, uid, true)).then(renderMembers).catch(function () {}); } });
+    }).catch(function () {});
+  }
+  function leaveTrip(t) {
+    var me = state.me; if (!t || !me || t.ownerId === me.uid) return;
+    askConfirm({
+      title: 'ออกจากทริปนี้?',
+      html: '<div class="cf-item"><span class="cf-item-text"><b>' + esc(t.name) + '</b><span>' + esc(tripRange(t)) + '</span></span></div>',
+      note: 'คุณจะไม่เห็นทริปนี้อีก จนกว่าเจ้าของทริปจะเพิ่มคุณกลับเข้ามา',
+      okLabel: 'ออกจากทริป'
+    }).then(function (ok) {
+      if (!ok) return;
+      state.selectedId = null;
+      commit(memberPaths(t, me.uid, false)).then(function () { go('#calendar'); toast('ออกจากทริปแล้ว'); }).catch(function () {});
+    });
   }
 
   /* ===== ปฏิทิน ===== */
@@ -1044,7 +1117,8 @@
   function heroMenu(t) {
     var items = (t.coverId ? '<button type="button" class="menu-item" role="menuitem" data-act="view-cover">' + ICON.zoom + 'ดูรูปปก</button>' +
       '<button type="button" class="menu-item" role="menuitem" data-act="remove-cover">' + ICON.imgOff + 'ลบรูปปก</button>' : '') +
-      (canManage(t) ? '<button type="button" class="menu-item danger" role="menuitem" data-act="delete-trip">' + ICON.trashS + 'ลบทริปนี้…</button>' : '');
+      (canManage(t) ? '<button type="button" class="menu-item danger" role="menuitem" data-act="delete-trip">' + ICON.trashS + 'ลบทริปนี้…</button>' : '') +
+      (state.me && t.ownerId !== state.me.uid && t.members && t.members[state.me.uid] ? '<button type="button" class="menu-item danger" role="menuitem" data-act="leave-trip">' + ICON.people + 'ออกจากทริปนี้…</button>' : '');
     if (!items) return '';
     if (!hasPopover) return items.replace(/class="menu-item( danger)?" role="menuitem"/g, function (m, d) { return 'class="btn-glass' + (d || '') + '"'; });
     return '<button type="button" class="btn-glass" popovertarget="heroMenu" aria-haspopup="menu" aria-label="ตัวเลือกเพิ่มเติม" title="ตัวเลือกเพิ่มเติม">' + ICON.dots + '<span class="lbl">เพิ่มเติม</span></button>' +
@@ -1079,6 +1153,9 @@
       '<span>' + ICON.cal + (t.start ? fmtLong(t.start) + ' – ' + fmtLong(t.end || t.start) : 'ยังไม่ระบุวัน') + '</span>' +
       '<span>' + ICON.clock + days + ' วัน ' + nights + ' คืน</span>' +
       '<span>' + ICON.people + (t.people || 1) + ' คน</span>' +
+      (state.me ? '<button type="button" class="hero-members" data-act="open-members" aria-label="' + esc('สมาชิกทริป ' + tripMembers(t).length + ' คน') + '">' +
+        tripMembers(t).slice(0, 4).map(function (uid) { return avatar(uid); }).join('') +
+        '<span>สมาชิก ' + tripMembers(t).length + ' คน</span></button>' : '') +
       '</div></div></div>';
   }
 
@@ -1557,6 +1634,11 @@
         var cm = calMonth(), nm = new Date(cm.y, cm.m + Number(el.dataset.dir), 1);
         state.calMonth = { y: nm.getFullYear(), m: nm.getMonth() }; render(); break;
       case 'cal-today': state.calMonth = null; render(); break;
+      case 'open-members': openMembers(); break;
+      case 'close-members': membersDialog.close(); break;
+      case 'add-member': addMember(currentTrip(), el.dataset.uid); break;
+      case 'remove-member': removeMember(currentTrip(), el.dataset.uid); break;
+      case 'leave-trip': leaveTrip(currentTrip()); break;
       case 'sign-out': signOut(''); break;
       case 'open-drawer': openDrawer(); break;
       case 'open-sheet':
