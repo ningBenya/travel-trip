@@ -667,3 +667,28 @@ h1,h2{margin:0}
 .form-ghost{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--line);border-radius:12px;color:var(--muted);font-size:14px}
 .form-ghost span{display:inline-flex;align-items:center;gap:8px}
 @media (prefers-reduced-motion:reduce){.edit-dialog[open]{animation:none}}
+
+/* ===== เข้าสู่ระบบ ===== */
+body:not([data-auth="in"]):not([data-auth="local"]) .app,
+body:not([data-auth="in"]):not([data-auth="local"]) .topbar,
+body:not([data-auth="in"]):not([data-auth="local"]) .fab{display:none!important}
+.login{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.login[hidden]{display:none}
+.login-card{width:min(400px,100%);background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:28px 24px 24px;display:flex;flex-direction:column;gap:18px;box-shadow:0 12px 32px rgba(27,36,48,.06)}
+.login-brand{display:flex;align-items:center;gap:12px}
+.login-brand h1{font-size:24px;margin:0}
+.login-card form{display:flex;flex-direction:column;gap:14px}
+.login-lead{margin:0}
+.login-help{margin:0;text-align:center}
+.login-wait{margin:0}
+.login .btn-primary{min-height:48px}
+
+/* กล่องผู้ใช้ในแถบข้าง */
+.me{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.me[hidden]{display:none}
+.me-who{display:flex;flex-direction:column;min-width:0}
+.me-who b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.me-links{display:flex;flex-wrap:wrap;gap:2px 12px}
+.me-link{display:inline-flex;align-items:center;min-height:32px;padding:0;border:none;background:none;color:var(--accent);font:inherit;font-size:14px;font-weight:600;text-decoration:none;cursor:pointer}
+.me-link:hover{text-decoration:underline;text-underline-offset:3px}
+.me-link[hidden]{display:none}

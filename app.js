@@ -109,7 +109,8 @@
 
   /* ===== สถานะ ===== */
   var state = {
-    db: { trips: {}, items: {} },
+    db: { trips: {}, items: {}, users: {} },
+    me: null,             // { uid, username, name, isAdmin } หลัง login
     loaded: false,
     selectedId: null,
     filter: 'all',
@@ -1456,6 +1457,7 @@
         else if (window.matchMedia('(max-width: 900px)').matches) $('#tripView').scrollIntoView({ behavior: 'smooth' });
         break;
       case 'new-trip': closeOverlays(); openTripDialog(null); break;
+      case 'sign-out': signOut(''); break;
       case 'open-drawer': openDrawer(); break;
       case 'open-sheet':
         if (!state.editingItemId) { resetDraft(); if (state.view === 'plan' && state.dayKey) { state.draft.date = state.dayKey; fillForm(); } }
@@ -1539,6 +1541,109 @@
     e.target.value = '';
   });
 
+  /* ===== เข้าสู่ระบบ ===== */
+  var fauth = null, subs = [];
+  // จำ listener ทั้งหมดไว้ ปิดทีเดียวตอนออกจากระบบ
+  function listen(path, cb, onErr) {
+    var ref = fdb.ref(path), fn = ref.on('value', cb, onErr || function () {});
+    subs.push({ path: path, ref: ref, fn: fn });
+    return fn;
+  }
+  function unlisten(path) {
+    subs = subs.filter(function (s) { if (s.path === path) { s.ref.off('value', s.fn); return false; } return true; });
+  }
+  function unlistenAll() { subs.forEach(function (s) { s.ref.off('value', s.fn); }); subs = []; }
+
+  // 'local' ไม่มี Firebase · 'wait' กำลังตรวจสอบ · 'out' ยังไม่ login · 'in' login แล้ว
+  function setAuthUI(kind) {
+    document.body.setAttribute('data-auth', kind);
+    $('#loginView').hidden = !(kind === 'out' || kind === 'wait');
+    $('#loginForm').hidden = kind === 'wait';
+    $('#loginWait').hidden = kind !== 'wait';
+    var me = state.me, box = $('#meBox');
+    box.hidden = !me;
+    if (me) {
+      $('#meName').textContent = me.name || me.username;
+      $('#meUser').textContent = '@' + me.username + (me.isAdmin ? ' · ผู้ดูแล' : '');
+      $('#usersLink').hidden = !me.isAdmin;
+    }
+  }
+  function showLoginError(msg) { var e = $('#loginError'); e.textContent = msg; e.hidden = !msg; }
+  function showLogin(msg) {
+    state.me = null;
+    setAuthUI('out');
+    showLoginError(msg || '');
+    var lf = $('#loginForm'); lf.password.value = '';
+    $('#loginSubmit').disabled = false; $('#loginSubmit').textContent = 'เข้าสู่ระบบ';
+    setTimeout(function () { (lf.username.value ? lf.password : lf.username).focus(); }, 30);
+  }
+  $('#loginForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target, u = TripCore.normalizeUsername(f.username.value), pw = f.password.value;
+    if (!u || !pw) return showLoginError('กรอก username และรหัสผ่าน');
+    if (!TripCore.validUsername(u)) return showLoginError(TripCore.authErrorText('auth/invalid-credential'));
+    var b = $('#loginSubmit'); b.disabled = true; b.textContent = 'กำลังเข้าสู่ระบบ…';
+    showLoginError('');
+    fauth.signInWithEmailAndPassword(TripCore.usernameToEmail(u), pw).catch(function (err) {
+      b.disabled = false; b.textContent = 'เข้าสู่ระบบ';
+      showLoginError(TripCore.authErrorText(err && err.code));
+      f.password.select();
+    });
+  });
+
+  function onSignedIn(user) {
+    setAuthUI('wait');
+    var isAdmin = TripCore.isAdminEmail(user.email), uname = TripCore.emailToUsername(user.email);
+    fdb.ref(ROOT + '/users/' + user.uid).once('value').then(function (snap) {
+      var prof = snap.val();
+      if (prof) return prof;
+      if (!isAdmin) return null;
+      // admin login ครั้งแรก: สร้างโปรไฟล์ให้เอง
+      prof = { username: uname, name: uname, createdAt: Date.now() };
+      var u = {}; u['users/' + user.uid] = prof; u['usernames/' + uname] = user.uid;
+      return fdb.ref(ROOT).update(u).then(function () { return prof; });
+    }).then(function (prof) {
+      if (!prof) return signOut('บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อผู้ดูแล');
+      state.me = { uid: user.uid, username: prof.username, name: prof.name, isAdmin: isAdmin };
+      setAuthUI('in');
+      startData();
+    }).catch(function () { signOut('เชื่อมต่อฐานข้อมูลไม่ได้ ลองใหม่อีกครั้ง'); });
+  }
+
+  function startData() {
+    var me = state.me;
+    setSync('wait');
+    listen('.info/connected', function (s) { setSync(s.val() ? 'live' : 'wait'); });
+    // บัญชีถูกปิดระหว่างใช้งาน → ออกจากระบบ
+    listen(ROOT + '/users/' + me.uid, function (s) {
+      if (!state.me) return;
+      if (!s.exists()) { signOut('บัญชีนี้ถูกปิดแล้ว'); return; }
+      var p = s.val(); state.me.name = p.name; setAuthUI('in');
+    });
+    listen(ROOT + '/users', function (s) { state.db.users = s.val() || {}; render(); });
+    startTrips();
+  }
+
+  function startTrips() {
+    var gotTrips = false;
+    listen(ROOT + '/trips', function (snap) {
+      state.db.trips = snap.val() || {}; state.loaded = true;
+      if (!gotTrips) { gotTrips = true; ensureSelected(); resetDraft(); }
+      render();
+    }, function () { setSync('err'); state.loaded = true; render(); });
+    listen(ROOT + '/items', function (snap) { state.db.items = snap.val() || {}; render(); });
+  }
+
+  function signOut(msg) {
+    unlistenAll();
+    try { closeOverlays(); [tripDialog, aiDialog, dayDialog, editDialog, cfDialog, lb].forEach(function (d) { if (d.open) d.close(); }); } catch (e) {}
+    state.db = { trips: {}, items: {}, users: {} };
+    state.selectedId = null; state.loaded = false; state.dayKey = null;
+    blobCache.clear();
+    var done = function () { showLogin(msg); resetDraft(); render(); };
+    return fauth.signOut().then(done, done);
+  }
+
   /* ===== เริ่มทำงาน ===== */
   enhanceDates();
   state.draft = emptyDraft();
@@ -1546,18 +1651,19 @@
   (function start() {
     var cfg = window.FIREBASE_CONFIG;
     if (!cfg || !cfg.databaseURL || !window.firebase) {
-      setSync('local'); loadLocal(); state.loaded = true; ensureSelected(); resetDraft(); render(); return;
+      setAuthUI('local'); setSync('local'); loadLocal(); state.loaded = true; ensureSelected(); resetDraft(); render(); return;
     }
-    setSync('wait');
-    try { firebase.initializeApp(cfg); fdb = firebase.database(); }
-    catch (e) { setSync('err'); loadLocal(); state.loaded = true; render(); return; }
-    fdb.ref('.info/connected').on('value', function (s) { setSync(s.val() ? 'live' : 'wait'); });
-    var gotTrips = false;
-    fdb.ref(ROOT + '/trips').on('value', function (snap) {
-      state.db.trips = snap.val() || {}; state.loaded = true;
-      if (!gotTrips) { gotTrips = true; ensureSelected(); resetDraft(); }
-      render();
-    }, function () { setSync('err'); state.loaded = true; render(); });
-    fdb.ref(ROOT + '/items').on('value', function (snap) { state.db.items = snap.val() || {}; render(); });
+    try {
+      firebase.initializeApp(cfg); fdb = firebase.database(); fauth = firebase.auth();
+      // ทดสอบกับ Firebase จำลองบนเครื่อง: เปิด http://127.0.0.1:<port>/?emu=1
+      if (/[?&]emu=1\b/.test(location.search) && /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
+        fauth.useEmulator('http://127.0.0.1:9099'); fdb.useEmulator('127.0.0.1', 9000);
+      }
+    } catch (e) { setAuthUI('out'); showLoginError('เปิดระบบไม่สำเร็จ ลองรีเฟรชหน้า'); return; }
+    setAuthUI('wait');
+    fauth.onAuthStateChanged(function (user) {
+      if (user) onSignedIn(user);
+      else if (document.body.getAttribute('data-auth') !== 'out') showLogin();
+    });
   })();
 })();
