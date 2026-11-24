@@ -120,6 +120,9 @@
     lightbox: null,       // { title, ids:[photoId], src:[dataURL]?, index }
     view: (function () { try { return localStorage.getItem('trip-planner-view') || 'plan'; } catch (e) { return 'plan'; } })(),
     dayKey: null,
+    route: 'calendar',
+    calMonth: null,       // { y, m } เดือนที่แสดงในปฏิทิน
+    pending: 0,           // จำนวนทริปที่ยังโหลดครั้งแรกไม่เสร็จ
     busy: 0
   };
 
@@ -274,18 +277,27 @@
         return x === y ? (b.createdAt || 0) - (a.createdAt || 0) : y.localeCompare(x);
       });
   }
-  function ensureSelected() {
-    if (state.selectedId && state.db.trips[state.selectedId]) return;
-    var fromHash = decodeURIComponent((location.hash || '').replace(/^#trip=/, ''));
-    var list = sortedTrips();
-    state.selectedId = state.db.trips[fromHash] ? fromHash : (list[0] ? list[0].id : null);
-  }
-  function selectTrip(id) {
-    state.selectedId = id; state.filter = 'all'; state.dayKey = null;
-    try { history.replaceState(null, '', '#trip=' + encodeURIComponent(id)); } catch (e) {}
-    resetDraft();
+  function ensureSelected() { /* ทริปที่เปิดอยู่มาจาก URL (#trip=<id>) ผ่าน route() */ }
+  function selectTrip(id) { go('#trip=' + encodeURIComponent(id)); }
+
+  /* ===== หน้า: #calendar (หน้าแรก) · #trip=<id> · #account · #users ===== */
+  function go(h) { if (location.hash === h) route(); else location.hash = h; }
+  function route() {
+    var h = location.hash || '', m = /^#trip=(.+)$/.exec(h), prev = state.route;
+    if (m) {
+      var id = decodeURIComponent(m[1]);
+      state.route = 'trip';
+      if (state.selectedId !== id) { state.selectedId = id; state.filter = 'all'; state.dayKey = null; resetDraft(); }
+    } else {
+      state.route = h === '#account' ? 'account' : (h === '#users' ? 'users' : 'calendar');
+      if (state.route === 'users' && !(state.me && state.me.isAdmin)) state.route = 'calendar';
+      if (state.route === 'account' && !state.me) state.route = 'calendar';
+    }
+    closeOverlays();
     render();
+    if (prev !== state.route || m) window.scrollTo(0, 0);
   }
+  window.addEventListener('hashchange', route);
 
   /* ===== แผนรายวัน ===== */
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -926,16 +938,23 @@
 
   /* ===== render ===== */
   function render() {
-    ensureSelected();
-    var trips = sortedTrips();
+    var trips = sortedTrips(), r = state.route;
     $('#tripCount').textContent = state.loaded ? trips.length + ' ทริป' : 'กำลังโหลด…';
+    var trip = r === 'trip' ? currentTrip() : null;
+    // เปิดลิงก์ทริปที่ไม่มีสิทธิ์ หรือทริปถูกลบไปแล้ว → กลับหน้าปฏิทิน
+    if (r === 'trip' && !trip && state.loaded && !state.pending) { go('#calendar'); return; }
     renderTripList(trips);
-    var trip = currentTrip();
-    $('#emptyApp').hidden = !state.loaded || !!trip;
+    document.querySelectorAll('.nav-link').forEach(function (a) { a.setAttribute('aria-current', String(a.getAttribute('data-route') === r)); });
+    $('#calendarView').hidden = r !== 'calendar';
+    $('#accountView').hidden = r !== 'account';
+    $('#usersView').hidden = r !== 'users';
+    $('#emptyApp').hidden = true;
     $('#tripView').hidden = !trip;
-    $('#topTitle').textContent = trip ? trip.name : 'ทริปของฉัน';
+    $('#topTitle').textContent = trip ? trip.name : ({ calendar: 'ปฏิทินทริป', account: 'เปลี่ยนรหัสผ่าน', users: 'จัดการผู้ใช้' }[r] || 'ทริปของฉัน');
     $('#fab').hidden = !trip;
-    if (!trip) { closeOverlays(); return; }
+    if (r === 'calendar') renderCalendar(trips);
+    if (r === 'users' && typeof renderUsers === 'function') renderUsers();
+    if (!trip) { if (r === 'trip') $('#topTitle').textContent = 'กำลังโหลด…'; hydrate(); return; }
     if (state.editingItemId && !(state.db.items[trip.id] || {})[state.editingItemId]) resetDraft();
     renderHero(trip);
     renderViewTabs();
@@ -946,9 +965,70 @@
     hydrate();
   }
 
+  /* ===== ปฏิทิน ===== */
+  function calMonth() {
+    if (state.calMonth) return state.calMonth;
+    var d = new Date(); return { y: d.getFullYear(), m: d.getMonth() };
+  }
+  function tripRange(t) {
+    if (!t.start) return 'ยังไม่ระบุวัน';
+    var e = t.end && t.end >= t.start ? t.end : t.start;
+    return e === t.start ? fmtLong(t.start) : fmtShort(t.start) + ' – ' + fmtLong(e);
+  }
+  function renderCalendar(trips) {
+    var box = $('#calendarView'), cm = calMonth(), today = isoDate(new Date());
+    if (state.loaded && !trips.length) {
+      box.innerHTML = '<section class="empty-app card"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#9AA1AC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18v13H3zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/></svg>' +
+        '<h1>ยังไม่มีทริป</h1><p class="muted">สร้างทริปแรก แล้วทริปจะขึ้นในปฏิทินตามวันไป–วันกลับ</p>' +
+        '<button type="button" class="btn-primary" data-act="new-trip">สร้างทริปแรก</button></section>';
+      return;
+    }
+    var L = TripCore.layoutMonth(trips, cm.y, cm.m), byId = {};
+    trips.forEach(function (t) { byId[t.id] = t; });
+    var mKey = cm.y + '-' + pad(cm.m + 1);
+    var title = new Date(cm.y, cm.m, 1).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+    var head = '<div class="cal-head"><h1>ปฏิทินทริป</h1>' +
+      '<div class="cal-nav"><button type="button" class="icon-btn outline" data-act="cal-step" data-dir="-1" aria-label="เดือนก่อนหน้า">' + ICON.chevL + '</button>' +
+      '<h2 class="cal-title" aria-live="polite">' + esc(title) + '</h2>' +
+      '<button type="button" class="icon-btn outline" data-act="cal-step" data-dir="1" aria-label="เดือนถัดไป">' + ICON.chevR + '</button>' +
+      '<button type="button" class="btn-secondary small-btn" data-act="cal-today">วันนี้</button></div></div>';
+    var wd = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
+    var grid = '<div class="cal card" role="grid" aria-label="' + esc('ปฏิทิน ' + title) + '"><div class="cal-wd" role="row">' +
+      wd.map(function (d) { return '<span role="columnheader">' + d + '</span>'; }).join('') + '</div>' +
+      L.weeks.map(function (w) {
+        var cells = w.days.map(function (d, i) {
+          var out = d.slice(0, 7) !== mKey;
+          return '<span class="cal-day' + (out ? ' out' : '') + (d === today ? ' today' : '') + '" style="grid-column:' + (i + 1) + '" role="gridcell"><b>' + Number(d.slice(8)) + '</b></span>';
+        }).join('');
+        var bars = w.bars.map(function (b) {
+          var t = byId[b.tripId];
+          return '<button type="button" class="cal-bar' + (b.startsHere ? ' s' : '') + (b.endsHere ? ' e' : '') + '" data-act="select-trip" data-id="' + esc(t.id) + '"' +
+            ' style="grid-column:' + (b.col + 1) + ' / span ' + b.span + ';grid-row:' + (b.lane + 2) + ';--bar:' + themeColor(t.theme) + '"' +
+            ' aria-label="' + esc(t.name + ' ' + tripRange(t)) + '" title="' + esc(t.name + ' · ' + tripRange(t)) + '"><span>' + esc(t.name) + '</span></button>';
+        }).join('');
+        return '<div class="cal-week" style="--lanes:' + w.laneCount + '">' + cells + bars + '</div>';
+      }).join('') + '</div>';
+    var inMonth = trips.filter(function (t) {
+      if (!t.start) return false;
+      var e = t.end && t.end >= t.start ? t.end : t.start;
+      return t.start.slice(0, 7) <= mKey && e.slice(0, 7) >= mKey;
+    }).sort(function (a, b) { return a.start.localeCompare(b.start); });
+    var row = function (t) {
+      return '<li><button type="button" class="cal-trip" data-act="select-trip" data-id="' + esc(t.id) + '">' +
+        '<span class="cal-dot" style="background:' + themeColor(t.theme) + '" aria-hidden="true"></span>' +
+        '<span class="cal-trip-text"><b>' + esc(t.name) + '</b><span class="muted small">' + esc(tripRange(t)) + (t.destination ? ' · ' + esc(t.destination) : '') + '</span></span>' +
+        '<b class="num">' + money(tripTotal(t.id)) + '</b></button></li>';
+    };
+    var undated = L.undated.map(function (id) { return byId[id]; }).filter(Boolean);
+    var lists = '<section class="card cal-list"><h2>ทริปเดือนนี้</h2>' +
+      (inMonth.length ? '<ul>' + inMonth.map(row).join('') + '</ul>' : '<p class="muted small">ไม่มีทริปในเดือนนี้</p>') + '</section>' +
+      (undated.length ? '<section class="card cal-list"><h2>ยังไม่ระบุวัน</h2><ul>' + undated.map(row).join('') + '</ul></section>' : '');
+    box.innerHTML = head + grid + lists;
+  }
+
   function renderTripList(trips) {
     $('#tripList').innerHTML = trips.map(function (t) {
-      var items = tripItems(t.id), on = t.id === state.selectedId;
+      var items = tripItems(t.id), on = state.route === 'trip' && t.id === state.selectedId;
       return '<button type="button" class="trip-card" data-act="select-trip" data-id="' + esc(t.id) + '" aria-current="' + on + '">' +
         '<div class="trip-strip" style="background:' + themeColor(t.theme) + '">' +
         (t.coverId ? '<img data-thumb="' + esc(t.coverId) + '" alt="">' : '') + '</div>' +
@@ -1473,6 +1553,10 @@
         else if (window.matchMedia('(max-width: 900px)').matches) $('#tripView').scrollIntoView({ behavior: 'smooth' });
         break;
       case 'new-trip': closeOverlays(); openTripDialog(null); break;
+      case 'cal-step':
+        var cm = calMonth(), nm = new Date(cm.y, cm.m + Number(el.dataset.dir), 1);
+        state.calMonth = { y: nm.getFullYear(), m: nm.getMonth() }; render(); break;
+      case 'cal-today': state.calMonth = null; render(); break;
       case 'sign-out': signOut(''); break;
       case 'open-drawer': openDrawer(); break;
       case 'open-sheet':
@@ -1623,6 +1707,7 @@
       state.me = { uid: user.uid, username: prof.username, name: prof.name, isAdmin: isAdmin };
       setAuthUI('in');
       startData();
+      route();
     }).catch(function () { signOut('เชื่อมต่อฐานข้อมูลไม่ได้ ลองใหม่อีกครั้ง'); });
   }
 
@@ -1658,16 +1743,19 @@
       var ids = snap.val() || {};
       Object.keys(ids).forEach(function (id) {
         if (open[id]) return;
-        open[id] = true;
+        state.pending++;
+        var settled = false, settle = function () { if (!settled) { settled = true; state.pending--; } };
+        open[id] = settle;
         listen(ROOT + '/trips/' + id, function (s) {
-          if (!s.exists()) { dropTrip(id); return; }
+          settle();
+          if (!s.exists()) { dropTrip(id); render(); return; }
           state.db.trips[id] = s.val(); render();
-        }, function () { dropTrip(id); });
+        }, function () { settle(); dropTrip(id); render(); });
         listen(ROOT + '/items/' + id, function (s) { state.db.items[id] = s.val() || {}; render(); });
       });
       Object.keys(open).forEach(function (id) {
         if (ids[id]) return;
-        delete open[id]; unlisten(ROOT + '/trips/' + id); unlisten(ROOT + '/items/' + id); dropTrip(id);
+        open[id](); delete open[id]; unlisten(ROOT + '/trips/' + id); unlisten(ROOT + '/items/' + id); dropTrip(id);
       });
       state.loaded = true; first(); render();
     }, function () { setSync('err'); state.loaded = true; render(); });
@@ -1713,7 +1801,7 @@
   (function start() {
     var cfg = window.FIREBASE_CONFIG;
     if (!cfg || !cfg.databaseURL || !window.firebase) {
-      setAuthUI('local'); setSync('local'); loadLocal(); state.loaded = true; ensureSelected(); resetDraft(); render(); return;
+      setAuthUI('local'); setSync('local'); loadLocal(); state.loaded = true; resetDraft(); route(); return;
     }
     try {
       firebase.initializeApp(cfg); fdb = firebase.database(); fauth = firebase.auth();

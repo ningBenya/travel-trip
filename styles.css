@@ -692,3 +692,59 @@ body:not([data-auth="in"]):not([data-auth="local"]) .fab{display:none!important}
 .me-link{display:inline-flex;align-items:center;min-height:32px;padding:0;border:none;background:none;color:var(--accent);font:inherit;font-size:14px;font-weight:600;text-decoration:none;cursor:pointer}
 .me-link:hover{text-decoration:underline;text-underline-offset:3px}
 .me-link[hidden]{display:none}
+
+/* ===== เมนูหลักในแถบข้าง ===== */
+.side-nav{display:flex;flex-direction:column;gap:4px}
+.nav-link{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink);font-weight:600;text-decoration:none}
+.nav-link:hover{background:#ECE8DF}
+.nav-link[aria-current="true"]{background:var(--ink);color:#fff}
+.nav-link:focus-visible{outline:3px solid #2456A6;outline-offset:2px}
+
+/* ===== ปฏิทิน ===== */
+.cal-view{display:flex;flex-direction:column;gap:16px;min-width:0}
+.cal-view[hidden]{display:none}
+.cal-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.cal-head h1{font-size:26px;margin:0}
+.cal-nav{display:flex;align-items:center;gap:8px}
+.cal-nav .icon-btn.outline{width:44px;min-height:44px;color:var(--ink)}
+.cal-title{font-size:18px;margin:0;min-width:9.5em;text-align:center}
+.cal{padding:8px 8px 4px;overflow:hidden}
+.cal-wd{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));font-size:13px;font-weight:600;color:var(--muted);text-align:center;padding:4px 0 8px}
+.cal-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:30px repeat(var(--lanes),26px) minmax(14px,1fr);row-gap:3px;min-height:104px;border-top:1px solid var(--line-soft)}
+.cal-day{grid-row:1 / -1;padding:4px 8px;border-left:1px solid var(--line-soft);font-variant-numeric:tabular-nums}
+.cal-day:first-child{border-left:none}
+.cal-day b{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;font-size:14px;font-weight:600;border-radius:999px}
+.cal-day.out b{color:#A8AEB8;font-weight:400}
+.cal-day.today b{background:var(--accent);color:#fff}
+.cal-bar{position:relative;z-index:1;min-width:0;margin:0 2px;padding:0 8px;border:none;border-radius:0;background:var(--bar);color:#fff;font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer;overflow:hidden}
+.cal-bar span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-bar.s{border-top-left-radius:7px;border-bottom-left-radius:7px;margin-left:4px}
+.cal-bar.e{border-top-right-radius:7px;border-bottom-right-radius:7px;margin-right:4px}
+.cal-bar:hover{filter:brightness(1.12)}
+.cal-bar:focus-visible{outline:3px solid #2456A6;outline-offset:1px}
+.cal-list{padding:16px 18px}
+.cal-list h2{font-size:16px;margin:0 0 8px}
+.cal-list p{margin:0}
+.cal-list ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.cal-trip{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:12px;min-height:52px;padding:8px 6px;border-top:1px solid var(--line-soft);cursor:pointer}
+.cal-list li:first-child .cal-trip{border-top:none}
+.cal-trip:hover{background:#FBFAF6}
+.cal-trip:focus-visible{outline:3px solid #2456A6;outline-offset:-3px;border-radius:8px}
+.cal-dot{flex:0 0 auto;width:12px;height:12px;border-radius:4px}
+.cal-trip-text{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+.cal-trip-text b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-trip .num{font-variant-numeric:tabular-nums}
+.page[hidden]{display:none}
+
+@media (max-width:760px){
+  .cal-head h1{font-size:22px}
+  .cal-head{flex-direction:column;align-items:stretch}
+  .cal-nav{justify-content:space-between}
+  .cal-title{min-width:0;flex:1 1 auto}
+  .cal{padding:6px 2px 2px;margin:0 -4px}
+  .cal-week{grid-template-rows:26px repeat(var(--lanes),18px) minmax(6px,1fr);min-height:64px;row-gap:2px}
+  .cal-day{padding:2px 0;text-align:center;border-left:none}
+  .cal-day b{font-size:13px;min-width:22px;height:22px}
+  .cal-bar{padding:0 4px;font-size:11px;margin:0 1px}
+  .cal-bar.s{margin-left:2px}.cal-bar.e{margin-right:2px}
+}
