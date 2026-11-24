@@ -50,10 +50,28 @@
   function vals(o) { return o ? Object.keys(o).map(function (k) { return o[k]; }) : []; }
   function arr(a) { return Array.isArray(a) ? a.filter(Boolean) : a ? vals(a) : []; }
   function lineTotal(i) { return (Number(i.price) || 0) * (Number(i.qty) || 1); }
-  var toastTimer;
-  function toast(msg) {
-    var t = $('#toast'); t.textContent = msg; t.hidden = false;
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 3200);
+  var toastTimer, toastDone = null;
+  // toast(msg) แจ้งเฉย ๆ · toast(msg, { undo: fn, done: fn }) มีปุ่ม "เลิกทำ"
+  // done() ทำงานเมื่อหมดเวลาหรือมีแจ้งเตือนใหม่มาแทน (เช่น ลบรูปจริงหลังพ้นช่วงเลิกทำ)
+  function toast(msg, o) {
+    var t = $('#toast'), prev = toastDone;
+    toastDone = null; clearTimeout(toastTimer);
+    if (prev) prev();
+    t.textContent = '';
+    var s = document.createElement('span'); s.textContent = msg; t.appendChild(s);
+    if (o && o.undo) {
+      toastDone = o.done || null;
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'toast-act'; b.textContent = 'เลิกทำ';
+      b.addEventListener('click', function () {
+        toastDone = null; clearTimeout(toastTimer); t.hidden = true; o.undo();
+      });
+      t.appendChild(b);
+    }
+    t.hidden = false;
+    toastTimer = setTimeout(function () {
+      t.hidden = true; var d = toastDone; toastDone = null; if (d) d();
+    }, o && o.undo ? 8000 : 3200);
   }
   var ICON = {
     pin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
@@ -66,6 +84,7 @@
     zoom: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5M11 8.5v5M8.5 11h5"/></svg>',
     imgOff: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M4 4l16 16"/></svg>',
     trashS: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+    dots: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
     penS: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>',
     c_travel: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>',
     c_stay: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>',
@@ -329,7 +348,7 @@
       '<button type="button" class="btn-glass" data-act="day-step" data-dir="-1" aria-label="วันก่อนหน้า"' + (idx === 0 ? ' disabled' : '') + '>' + ICON.chevL + '</button>' +
       '<button type="button" class="btn-glass" data-act="edit-day" aria-label="แก้ไขคำโปรยและเคล็ดลับของวันนี้">' + ICON.penS + '<span class="lbl">ข้อมูลวัน</span></button>' +
       '<button type="button" class="btn-glass" data-act="add-stop" data-day="' + key + '">' + ICON.plus + '<span class="lbl">เพิ่มจุด</span></button>' +
-      '<button type="button" class="btn-glass" data-act="export-day" aria-label="บันทึกแผนวันนี้เป็นรูป" title="บันทึกแผนวันนี้เป็นรูป">' + ICON.download + '<span class="lbl">บันทึกเป็นรูป</span></button>' +
+      '<button type="button" class="btn-glass" data-act="export-day" aria-label="บันทึกแผนวันนี้เป็นรูป" title="บันทึกแผนวันนี้เป็นรูป">' + ICON.download + '<span class="lbl">บันทึกรูป</span></button>' +
       '<button type="button" class="btn-glass" data-act="day-step" data-dir="1" aria-label="วันถัดไป"' + (idx === days.length - 1 ? ' disabled' : '') + '>' + ICON.chevR + '</button>' +
       '</span></div></section>';
 
@@ -936,8 +955,27 @@
     }).join('');
   }
 
+  var hasPopover = typeof HTMLElement !== 'undefined' && HTMLElement.prototype.hasOwnProperty('popover');
+  // ปุ่มที่ใช้ไม่บ่อยและปุ่มลบ อยู่ในเมนู "เพิ่มเติม" แยกจากปุ่มแก้ไข กันกดพลาด
+  function heroMenu(t) {
+    var items = (t.coverId ? '<button type="button" class="menu-item" role="menuitem" data-act="view-cover">' + ICON.zoom + 'ดูรูปปก</button>' +
+      '<button type="button" class="menu-item" role="menuitem" data-act="remove-cover">' + ICON.imgOff + 'ลบรูปปก</button>' : '') +
+      '<button type="button" class="menu-item danger" role="menuitem" data-act="delete-trip">' + ICON.trashS + 'ลบทริปนี้…</button>';
+    if (!hasPopover) return items.replace(/class="menu-item( danger)?" role="menuitem"/g, function (m, d) { return 'class="btn-glass' + (d || '') + '"'; });
+    return '<button type="button" class="btn-glass" popovertarget="heroMenu" aria-haspopup="menu" aria-label="ตัวเลือกเพิ่มเติม" title="ตัวเลือกเพิ่มเติม">' + ICON.dots + '<span class="lbl">เพิ่มเติม</span></button>' +
+      '<div class="menu" id="heroMenu" popover role="menu" aria-label="ตัวเลือกเพิ่มเติมของทริป">' + items + '</div>';
+  }
+  document.addEventListener('toggle', function (e) {
+    var m = e.target;
+    if (!m || m.id !== 'heroMenu' || e.newState !== 'open') return;
+    var b = document.querySelector('[popovertarget="heroMenu"]'); if (!b) return;
+    var r = b.getBoundingClientRect();
+    m.style.top = Math.round(r.bottom + 6) + 'px';
+    m.style.right = Math.max(8, Math.round(window.innerWidth - r.right)) + 'px';
+    var first = m.querySelector('button'); if (first) first.focus();
+  }, true);
   function renderHero(t) {
-    var days = dayCount(t), nights = Math.max(days - 1, 0), canDelete = true;
+    var days = dayCount(t), nights = Math.max(days - 1, 0);
     var hero = $('#hero');
     hero.style.setProperty('--hero', themeColor(t.theme));
     hero.innerHTML =
@@ -947,10 +985,8 @@
       '<div class="hero-in"><div class="hero-actions">' +
       '<label class="btn-glass file-btn" title="' + (t.coverId ? 'เปลี่ยนรูปปก' : 'ใส่รูปปก') + '">' + ICON.img + '<span class="lbl">' + (t.coverId ? 'เปลี่ยนรูปปก' : 'ใส่รูปปก') + '</span>' +
       '<input type="file" accept="image/*" data-change="hero-cover" aria-label="' + (t.coverId ? 'เปลี่ยนรูปปก' : 'ใส่รูปปก') + '"></label>' +
-      (t.coverId ? '<button type="button" class="btn-glass" data-act="view-cover" style="cursor:zoom-in" aria-label="ดูรูปปก" title="ดูรูปปก">' + ICON.zoom + '<span class="lbl">ดูรูปปก</span></button>' +
-        '<button type="button" class="btn-glass" data-act="remove-cover" aria-label="ลบรูปปก" title="ลบรูปปก">' + ICON.imgOff + '<span class="lbl">ลบรูปปก</span></button>' : '') +
       '<button type="button" class="btn-glass" data-act="edit-trip" aria-label="แก้ไขทริป" title="แก้ไขทริป">' + ICON.penS + '<span class="lbl">แก้ไขทริป</span></button>' +
-      (canDelete ? '<button type="button" class="btn-glass danger" data-act="delete-trip" aria-label="ลบทริปนี้" title="ลบทริปนี้">' + ICON.trashS + '<span class="lbl">ลบทริปนี้</span></button>' : '') +
+      heroMenu(t) +
       '</div><div class="hero-text">' +
       '<span class="hero-dest">' + ICON.pin + esc(t.destination || 'ยังไม่ระบุจุดหมาย') + '</span>' +
       '<h1>' + esc(t.name) + '</h1>' +
@@ -1202,25 +1238,23 @@
   cfDialog.addEventListener('close', function () { if (cfResolve) cfFinish(false); });
   cfDialog.addEventListener('click', function (e) { if (e.target === cfDialog) cfFinish(false); }); // กดพื้นหลังเพื่อยกเลิก
 
+  // ลบทันทีแล้วให้กด "เลิกทำ" ได้ 8 วินาที (กดพลาดก็กู้คืนได้ ไม่ต้องตอบกล่องยืนยันทุกครั้ง)
+  // รูปจะถูกลบจริงเมื่อพ้นช่วงเลิกทำเท่านั้น
   function deleteItem(id) {
     var t = currentTrip(), i = t && (state.db.items[t.id] || {})[id];
     if (!i) return;
-    var c = CAT[i.cat] || CATS[0], pid = arr(i.photoIds)[0];
-    var when = [i.date ? fmtShort(i.date) : '', i.timeStart ? timeRange(i) + ' น.' : ''].filter(Boolean).join(' · ');
-    askConfirm({
-      title: 'ลบรายการนี้?',
-      html: '<div class="cf-item">' + (pid ? '<img data-thumb="' + esc(pid) + '" alt="">' : '<span class="cf-item-ic" style="background:' + c.bg + ';color:' + c.color + '">' + ICON['c_' + c.key] + '</span>') +
-        '<span class="cf-item-text"><b>' + esc(i.name) + '</b><span><span class="chip" style="color:' + c.color + ';background:' + c.bg + '">' + c.label + '</span>' +
-        (when ? ' ' + esc(when) : '') + (lineTotal(i) ? ' · ' + money(lineTotal(i)) : '') + '</span></span></div>',
-      note: arr(i.photoIds).length ? 'รูปของรายการนี้ ' + arr(i.photoIds).length + ' รูปจะถูกลบด้วย' : ''
-    }).then(function (ok) {
-      if (ok) doDeleteItem(t, i, id);
-    });
-  }
-  function doDeleteItem(t, i, id) {
-    var u = {}; u['items/' + t.id + '/' + id] = null;
+    var copy = JSON.parse(JSON.stringify(i)), tripId = t.id, path = 'items/' + tripId + '/' + id;
+    var u = {}; u[path] = null;
     if (state.editingItemId === id) resetDraft();
-    commit(u).then(function () { deletePhotos(arr(i.photoIds)); toast('ลบรายการแล้ว'); }).catch(function () {});
+    commit(u).then(function () {
+      toast('ลบ “' + copy.name + '” แล้ว', {
+        undo: function () {
+          var r = {}; r[path] = copy;
+          commit(r).then(function () { toast('กู้คืน “' + copy.name + '” แล้ว'); }).catch(function () {});
+        },
+        done: function () { deletePhotos(arr(copy.photoIds)); }
+      });
+    }).catch(function () {});
   }
 
   /* ===== ฟอร์มทริป (dialog) ===== */
@@ -1304,16 +1338,28 @@
       html: '<div class="cf-item cf-trip"><span class="cf-cover" style="background:' + themeColor(t.theme) + '">' + (t.coverId ? '<img data-thumb="' + esc(t.coverId) + '" alt="">' : '') + '</span>' +
         '<span class="cf-item-text"><b>' + esc(t.name) + '</b><span>' + esc(t.destination || '') + (t.start ? ' · ' + fmtShort(t.start) + ' – ' + fmtShort(t.end || t.start) : '') + '</span>' +
         '<span>' + items.length + ' รายการ · ' + money(tripTotal(t.id)) + '</span></span></div>',
-      note: 'รายการ รูป และแผนรายวันทั้งหมดของทริปนี้จะถูกลบ และกู้คืนไม่ได้',
+      note: 'รายการ รูป และแผนรายวันทั้งหมดของทริปนี้จะถูกลบ · กด “เลิกทำ” ได้ภายใน 8 วินาทีหลังลบ',
       okLabel: 'ลบทริป'
     }).then(function (ok) { if (ok) doDeleteTrip(t, items); });
   }
   function doDeleteTrip(t, items) {
+    var id = t.id, tripCopy = JSON.parse(JSON.stringify(t));
+    var itemsCopy = JSON.parse(JSON.stringify(state.db.items[id] || {}));
     var photos = [t.coverId];
     items.forEach(function (i) { photos = photos.concat(arr(i.photoIds)); });
-    var u = {}; u['trips/' + t.id] = null; u['items/' + t.id] = null;
+    var u = {}; u['trips/' + id] = null; u['items/' + id] = null;
     state.selectedId = null;
-    commit(u).then(function () { deletePhotos(photos); resetDraft(); render(); toast('ลบทริปแล้ว'); }).catch(function () {});
+    commit(u).then(function () {
+      resetDraft(); render();
+      toast('ลบทริป “' + tripCopy.name + '” แล้ว', {
+        undo: function () {
+          var r = {}; r['trips/' + id] = tripCopy;
+          if (Object.keys(itemsCopy).length) r['items/' + id] = itemsCopy;
+          commit(r).then(function () { selectTrip(id); toast('กู้คืนทริปแล้ว'); }).catch(function () {});
+        },
+        done: function () { deletePhotos(photos.filter(Boolean)); }
+      });
+    }).catch(function () {});
   }
   function setCover(file) {
     var t = currentTrip(); if (!t || !file) return;
@@ -1328,9 +1374,20 @@
   }
   function removeCover() {
     var t = currentTrip(); if (!t || !t.coverId) return;
-    var old = t.coverId, u = {};
-    u['trips/' + t.id + '/coverId'] = ''; u['trips/' + t.id + '/updatedAt'] = Date.now();
-    commit(u).then(function () { deletePhotos([old]); }).catch(function () {});
+    var old = t.coverId, id = t.id, u = {};
+    u['trips/' + id + '/coverId'] = ''; u['trips/' + id + '/updatedAt'] = Date.now();
+    commit(u).then(function () {
+      toast('ลบรูปปกแล้ว', {
+        undo: function () {
+          var r = {}; r['trips/' + id + '/coverId'] = old;
+          commit(r).catch(function () {});
+        },
+        done: function () {
+          var now = state.db.trips[id];
+          if (!now || now.coverId !== old) deletePhotos([old]);
+        }
+      });
+    }).catch(function () {});
   }
 
   /* ===== ดูรูปเต็มจอ ===== */
@@ -1348,8 +1405,8 @@
     $('#lbCounter').textContent = n > 1 ? (L.index + 1) + ' / ' + n : '';
     img.alt = L.title + ' รูปที่ ' + (L.index + 1);
     var thumb = blobCache.get('thumbs/' + id);
-    img.src = typeof thumb === 'string' && thumb ? thumb : '';
-    getBlob('photos', id).then(function (src) { if (state.lightbox === L && L.ids[L.index] === id && src) img.src = src; });
+    if (typeof thumb === 'string' && thumb) { img.src = thumb; img.hidden = false; } else { img.removeAttribute('src'); img.hidden = true; }
+    getBlob('photos', id).then(function (src) { if (state.lightbox === L && L.ids[L.index] === id && src) { img.src = src; img.hidden = false; } });
     lb.querySelectorAll('.lb-prev,.lb-next').forEach(function (b) { b.hidden = n < 2; });
     var th = $('#lbThumbs');
     th.hidden = n < 2;
@@ -1362,7 +1419,7 @@
     var L = state.lightbox; if (!L || L.ids.length < 2) return;
     L.index = (L.index + dir + L.ids.length) % L.ids.length; renderLightbox();
   }
-  lb.addEventListener('close', function () { state.lightbox = null; $('#lbImg').removeAttribute('src'); });
+  lb.addEventListener('close', function () { state.lightbox = null; var i = $('#lbImg'); i.removeAttribute('src'); i.hidden = true; });
   lb.addEventListener('keydown', function (e) {
     if (e.key === 'ArrowLeft') { e.preventDefault(); lbStep(-1); }
     if (e.key === 'ArrowRight') { e.preventDefault(); lbStep(1); }
@@ -1390,6 +1447,8 @@
       }
       lb.close(); return;
     }
+    var pop = el.closest('[popover]');
+    if (pop && pop.hidePopover) { try { pop.hidePopover(); } catch (e3) {} }
     switch (act) {
       case 'select-trip':
         selectTrip(el.dataset.id);
