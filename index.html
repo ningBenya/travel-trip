@@ -7,7 +7,7 @@
 <meta name="description" content="จัดทริปเที่ยว เก็บค่าเดินทาง ที่พัก ที่เที่ยว อาหาร และช้อปปิ้ง พร้อมรูปและแผนที่">
 <link rel="preload" href="fonts/plex-thai-thai-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/plex-thai-thai-700.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="styles.css?v=20261124e">
+<link rel="stylesheet" href="styles.css?v=20261124f">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231B2430'/%3E%3Cpath d='M9 22l14-6-14-6 3 6z' fill='%23F6F4EF'/%3E%3C/svg%3E">
 </head>
 <body data-auth="wait">
@@ -85,7 +85,23 @@
     </section>
 
     <div class="cal-view" id="calendarView" hidden></div>
-    <section class="page" id="accountView" hidden aria-labelledby="accountTitle"></section>
+    <section class="page" id="accountView" hidden aria-labelledby="accountTitle">
+      <h1 id="accountTitle" class="page-title">เปลี่ยนรหัสผ่าน</h1>
+      <form class="card page-card" id="pwForm" novalidate>
+        <p class="muted small page-lead" id="pwWho"></p>
+        <label class="field">รหัสผ่านปัจจุบัน
+          <input type="password" name="old" autocomplete="current-password" required>
+        </label>
+        <label class="field">รหัสผ่านใหม่ <span class="req">(อย่างน้อย 8 ตัว)</span>
+          <input type="password" name="pw" autocomplete="new-password" minlength="8" required>
+        </label>
+        <label class="field">พิมพ์รหัสผ่านใหม่อีกครั้ง
+          <input type="password" name="pw2" autocomplete="new-password" minlength="8" required>
+        </label>
+        <p class="error" id="pwError" role="alert" hidden></p>
+        <button type="submit" class="btn-primary" id="pwSubmit">บันทึกรหัสผ่านใหม่</button>
+      </form>
+    </section>
     <section class="page" id="usersView" hidden aria-labelledby="usersTitle"></section>
 
     <div class="trip-view" id="tripView" hidden>
@@ -397,6 +413,6 @@
 <script src="firebase-config.js"></script>
 <script src="ai-config.js?v=20261118"></script>
 <script src="core.js?v=20261124b"></script>
-<script src="app.js?v=20261124e"></script>
+<script src="app.js?v=20261124f"></script>
 </body>
 </html>

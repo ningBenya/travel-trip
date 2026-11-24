@@ -953,6 +953,7 @@
     $('#topTitle').textContent = trip ? trip.name : ({ calendar: 'ปฏิทินทริป', account: 'เปลี่ยนรหัสผ่าน', users: 'จัดการผู้ใช้' }[r] || 'ทริปของฉัน');
     $('#fab').hidden = !trip;
     if (r === 'calendar') renderCalendar(trips);
+    if (r === 'account' && state.me) $('#pwWho').textContent = 'บัญชี @' + state.me.username;
     if (membersDialog.open && !trip) membersDialog.close(); else if (membersDialog.open) renderMembers();
     if (r === 'users' && typeof renderUsers === 'function') renderUsers();
     if (!trip) { if (r === 'trip') $('#topTitle').textContent = 'กำลังโหลด…'; hydrate(); return; }
@@ -965,6 +966,28 @@
     if (plan) renderPlan(trip); else { renderSummary(trip); renderList(trip); }
     hydrate();
   }
+
+  /* ===== เปลี่ยนรหัสผ่าน ===== */
+  $('#pwForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target, err = $('#pwError'), user = fauth && fauth.currentUser;
+    var fail = function (m) { err.textContent = m; err.hidden = false; };
+    if (!user) return fail('กรุณาเข้าสู่ระบบใหม่');
+    if (!f.old.value) return fail('กรอกรหัสผ่านปัจจุบัน');
+    var p = TripCore.passwordProblem(f.old.value, f.pw.value, f.pw2.value);
+    if (p) return fail(p);
+    err.hidden = true;
+    var b = $('#pwSubmit'); b.disabled = true; b.textContent = 'กำลังบันทึก…';
+    var cred = firebase.auth.EmailAuthProvider.credential(user.email, f.old.value);
+    user.reauthenticateWithCredential(cred).then(function () { return user.updatePassword(f.pw.value); })
+      .then(function () { f.reset(); toast('เปลี่ยนรหัสผ่านแล้ว'); })
+      .catch(function (x) {
+        var c = x && x.code;
+        fail(c === 'auth/invalid-credential' || c === 'auth/wrong-password' || c === 'auth/invalid-login-credentials'
+          ? 'รหัสผ่านปัจจุบันไม่ถูกต้อง' : TripCore.authErrorText(c));
+      })
+      .then(function () { b.disabled = false; b.textContent = 'บันทึกรหัสผ่านใหม่'; });
+  });
 
   /* ===== สมาชิกทริป ===== */
   var membersDialog = $('#membersDialog');

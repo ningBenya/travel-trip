@@ -90,3 +90,11 @@ test('layoutMonth ignores trips outside the grid', () => {
   assert.equal(barsOf(m, 'far').length, 0);
   assert.deepEqual(m.undated, []);
 });
+
+test('passwordProblem', () => {
+  assert.equal(C.passwordProblem('oldpass12', '1234567', '1234567'), 'รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัว');
+  assert.equal(C.passwordProblem('oldpass12', 'newpass123', 'newpass124'), 'รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน');
+  assert.equal(C.passwordProblem('samepass1', 'samepass1', 'samepass1'), 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม');
+  assert.equal(C.passwordProblem('oldpass12', 'newpass123', 'newpass123'), '');
+  assert.equal(C.passwordProblem(null, 'newpass123', 'newpass123'), '');
+});
