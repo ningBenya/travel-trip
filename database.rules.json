@@ -29,7 +29,7 @@
           "members": {
             "$uid": {
               ".write": "auth != null && $uid == auth.uid && !newData.exists() && data.exists()",
-              ".validate": "newData.val() == true && root.child('planner/users/' + $uid).exists()"
+              ".validate": "newData.val() == true && newData.parent().parent().parent().parent().child('users/' + $uid).exists()"
             }
           },
           "id": { ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()" },
@@ -48,6 +48,7 @@
       "userTrips": {
         "$u": {
           ".read": "auth != null && (auth.uid == $u || auth.token.email == 'hwangning@travel.local')",
+          ".write": "auth != null && auth.token.email == 'hwangning@travel.local'",
           "$t": {
             ".write": "auth != null && (auth.token.email == 'hwangning@travel.local' || root.child('planner/trips/' + $t + '/ownerId').val() == auth.uid || (!root.child('planner/trips/' + $t).exists() && newData.parent().parent().parent().child('trips/' + $t + '/ownerId').val() == auth.uid) || ($u == auth.uid && !newData.exists()))",
             ".validate": "newData.val() == true"

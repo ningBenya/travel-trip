@@ -102,7 +102,28 @@
         <button type="submit" class="btn-primary" id="pwSubmit">บันทึกรหัสผ่านใหม่</button>
       </form>
     </section>
-    <section class="page" id="usersView" hidden aria-labelledby="usersTitle"></section>
+    <section class="page" id="usersView" hidden aria-labelledby="usersTitle">
+      <h1 id="usersTitle" class="page-title">จัดการผู้ใช้</h1>
+      <form class="card page-card" id="newUserForm" novalidate>
+        <h2>สร้างผู้ใช้ใหม่</h2>
+        <label class="field">Username <span class="req">(a–z, 0–9, . _ - ยาว 3–30 ตัว)</span>
+          <input type="text" name="username" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="30" required>
+        </label>
+        <label class="field">ชื่อที่แสดง
+          <input type="text" name="name" autocomplete="off" maxlength="100" required>
+        </label>
+        <label class="field">รหัสผ่านเริ่มต้น <span class="req">(อย่างน้อย 8 ตัว)</span>
+          <input type="text" name="password" autocomplete="off" spellcheck="false" minlength="8" required>
+        </label>
+        <p class="muted small page-lead">ส่ง username และรหัสเริ่มต้นให้เจ้าตัว แล้วให้เปลี่ยนรหัสเองในหน้า "เปลี่ยนรหัสผ่าน"</p>
+        <p class="error" id="newUserError" role="alert" hidden></p>
+        <button type="submit" class="btn-primary" id="newUserSubmit">สร้างผู้ใช้</button>
+      </form>
+      <section class="card page-card" aria-labelledby="userListTitle">
+        <h2 id="userListTitle">ผู้ใช้ทั้งหมด <span class="muted small" id="userCount"></span></h2>
+        <ul class="mem-list" id="userList"></ul>
+      </section>
+    </section>
 
     <div class="trip-view" id="tripView" hidden>
       <header class="hero" id="hero"></header>
@@ -413,6 +434,6 @@
 <script src="firebase-config.js"></script>
 <script src="ai-config.js?v=20261118"></script>
 <script src="core.js?v=20261124b"></script>
-<script src="app.js?v=20261124f"></script>
+<script src="app.js?v=20261124g"></script>
 </body>
 </html>

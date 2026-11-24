@@ -955,7 +955,7 @@
     if (r === 'calendar') renderCalendar(trips);
     if (r === 'account' && state.me) $('#pwWho').textContent = 'บัญชี @' + state.me.username;
     if (membersDialog.open && !trip) membersDialog.close(); else if (membersDialog.open) renderMembers();
-    if (r === 'users' && typeof renderUsers === 'function') renderUsers();
+    if (r === 'users') renderUsers();
     if (!trip) { if (r === 'trip') $('#topTitle').textContent = 'กำลังโหลด…'; hydrate(); return; }
     if (state.editingItemId && !(state.db.items[trip.id] || {})[state.editingItemId]) resetDraft();
     renderHero(trip);
@@ -965,6 +965,105 @@
     $('#summary').hidden = plan; $('#share').hidden = plan; $('#costList').hidden = plan; $('#planView').hidden = !plan;
     if (plan) renderPlan(trip); else { renderSummary(trip); renderList(trip); }
     hydrate();
+  }
+
+  /* ===== จัดการผู้ใช้ (admin) ===== */
+  var EMU = false; // ใช้ Firebase จำลองบนเครื่อง (ตั้งใน start)
+  function userTripIds(uid) {
+    return Object.keys(state.db.trips).filter(function (id) { var t = state.db.trips[id]; return t && t.members && t.members[uid]; });
+  }
+  function renderUsers() {
+    var me = state.me; if (!me || !me.isAdmin) return;
+    var ids = Object.keys(state.db.users).sort(function (a, b) { return userName(a).localeCompare(userName(b), 'th'); });
+    $('#userCount').textContent = ids.length + ' คน';
+    $('#userList').innerHTML = ids.map(function (uid) {
+      var u = state.db.users[uid], n = userTripIds(uid).length, self = uid === me.uid;
+      return '<li class="mem-row">' + avatar(uid) +
+        '<span class="mem-text"><b>' + esc(userName(uid)) + (self ? ' (คุณ)' : '') + '</b><span class="muted small">@' + esc(u.username) + ' · ' + n + ' ทริป</span></span>' +
+        (TripCore.isAdminEmail(TripCore.usernameToEmail(u.username)) ? '<span class="mem-badge">ผู้ดูแล</span>'
+          : '<button type="button" class="btn-secondary small-btn" data-act="deactivate-user" data-uid="' + esc(uid) + '">ปิดบัญชี</button>') +
+        '</li>';
+    }).join('');
+  }
+
+  // สร้างบัญชีผ่าน Firebase app ตัวที่สอง เพื่อไม่ให้ admin หลุดจากระบบ
+  function createAuthAccount(email, password) {
+    var sec = firebase.initializeApp(window.FIREBASE_CONFIG, 'admin-create-' + Date.now());
+    var a = sec.auth();
+    if (EMU) a.useEmulator('http://127.0.0.1:9099');
+    return a.createUserWithEmailAndPassword(email, password).then(function (cred) {
+      var uid = cred.user.uid;
+      return a.signOut().then(function () { return sec.delete(); }).then(function () { return uid; });
+    }, function (err) { return sec.delete().then(function () { throw err; }, function () { throw err; }); });
+  }
+
+  $('#newUserForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target, err = $('#newUserError');
+    var fail = function (m) { err.textContent = m; err.hidden = false; };
+    var uname = TripCore.normalizeUsername(f.username.value), name = f.name.value.trim(), pw = f.password.value;
+    if (!TripCore.validUsername(uname)) return fail('username ใช้ได้เฉพาะ a–z, 0–9, จุด, ขีดล่าง และขีดกลาง ยาว 3–30 ตัว');
+    if (!name) return fail('กรอกชื่อที่แสดง');
+    var p = TripCore.passwordProblem(null, pw, pw);
+    if (p) return fail(p.replace('รหัสผ่านใหม่', 'รหัสผ่านเริ่มต้น'));
+    err.hidden = true;
+    var b = $('#newUserSubmit');
+    fdb.ref(ROOT + '/usernames/' + uname).once('value').then(function (s) {
+      var oldUid = s.val();
+      if (!oldUid) return null;
+      return askConfirm({
+        title: 'username นี้มีอยู่แล้ว',
+        html: '<div class="cf-item"><span class="cf-item-text"><b>@' + esc(uname) + '</b><span>' + esc(userName(oldUid)) + ' · ' + userTripIds(oldUid).length + ' ทริป</span></span></div>',
+        note: 'ใช้เมื่อเจ้าของบัญชีลืมรหัสผ่าน: ลบบัญชีเดิมใน Firebase Console (Authentication → Users) ก่อน แล้วบัญชีใหม่จะได้ทริปเดิมทั้งหมด',
+        okLabel: 'แทนบัญชีเดิม'
+      }).then(function (ok) { if (!ok) throw { code: 'cancel' }; return oldUid; });
+    }).then(function (oldUid) {
+      b.disabled = true; b.textContent = 'กำลังสร้าง…';
+      return createAuthAccount(TripCore.usernameToEmail(uname), pw).then(function (uid) {
+        var u = {};
+        u['users/' + uid] = { username: uname, name: name, createdAt: Date.now() };
+        u['usernames/' + uname] = uid;
+        if (oldUid && oldUid !== uid) {
+          userTripIds(oldUid).forEach(function (t) {
+            u['trips/' + t + '/members/' + oldUid] = null; u['trips/' + t + '/members/' + uid] = true;
+            if (state.db.trips[t].ownerId === oldUid) u['trips/' + t + '/ownerId'] = uid;
+            u['userTrips/' + uid + '/' + t] = true;
+          });
+          u['userTrips/' + oldUid] = null; u['users/' + oldUid] = null;
+        }
+        return fdb.ref(ROOT).update(u).then(function () {
+          f.reset();
+          toast(oldUid ? 'สร้างบัญชี @' + uname + ' แทนบัญชีเดิมแล้ว' : 'สร้างบัญชี @' + uname + ' แล้ว');
+        });
+      });
+    }).catch(function (x) {
+      if (x && x.code === 'cancel') return;
+      if (x && x.code === 'auth/email-already-in-use') return fail('username นี้ยังมีบัญชีใน Firebase อยู่ ถ้าจะสร้างใหม่ ให้ลบบัญชีเดิมใน Firebase Console (Authentication → Users) ก่อน');
+      fail(x && x.code && x.code.indexOf('auth/') === 0 ? TripCore.authErrorText(x.code) : 'สร้างบัญชีไม่สำเร็จ ลองใหม่อีกครั้ง');
+    }).then(function () { b.disabled = false; b.textContent = 'สร้างผู้ใช้'; });
+  });
+
+  function deactivateUser(uid) {
+    var me = state.me, u0 = state.db.users[uid];
+    if (!me || !me.isAdmin || !u0 || uid === me.uid) return;
+    var trips = userTripIds(uid);
+    askConfirm({
+      title: 'ปิดบัญชีนี้?',
+      html: '<div class="cf-item">' + avatar(uid) + '<span class="cf-item-text"><b>' + esc(userName(uid)) + '</b><span>@' + esc(u0.username) + ' · ' + trips.length + ' ทริป</span></span></div>',
+      note: 'คนนี้จะเข้าระบบไม่ได้ และถูกเอาออกจากทุกทริป ทริปที่เขาเป็นเจ้าของจะย้ายมาเป็นของคุณ (บัญชีใน Firebase ยังอยู่ ลบได้ที่ Firebase Console)',
+      okLabel: 'ปิดบัญชี'
+    }).then(function (ok) {
+      if (!ok) return;
+      var u = {};
+      u['users/' + uid] = null; u['usernames/' + u0.username] = null; u['userTrips/' + uid] = null;
+      trips.forEach(function (t) {
+        u['trips/' + t + '/members/' + uid] = null;
+        if (state.db.trips[t].ownerId === uid) {
+          u['trips/' + t + '/ownerId'] = me.uid; u['trips/' + t + '/members/' + me.uid] = true; u['userTrips/' + me.uid + '/' + t] = true;
+        }
+      });
+      fdb.ref(ROOT).update(u).then(function () { toast('ปิดบัญชี @' + u0.username + ' แล้ว'); }, function () { toast('ปิดบัญชีไม่สำเร็จ ลองใหม่อีกครั้ง'); });
+    });
   }
 
   /* ===== เปลี่ยนรหัสผ่าน ===== */
@@ -1662,6 +1761,7 @@
       case 'add-member': addMember(currentTrip(), el.dataset.uid); break;
       case 'remove-member': removeMember(currentTrip(), el.dataset.uid); break;
       case 'leave-trip': leaveTrip(currentTrip()); break;
+      case 'deactivate-user': deactivateUser(el.dataset.uid); break;
       case 'sign-out': signOut(''); break;
       case 'open-drawer': openDrawer(); break;
       case 'open-sheet':
@@ -1808,12 +1908,16 @@
       var u = {}; u['users/' + user.uid] = prof; u['usernames/' + uname] = user.uid;
       return fdb.ref(ROOT).update(u).then(function () { return prof; });
     }).then(function (prof) {
-      if (!prof) return signOut('บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อผู้ดูแล');
+      if (!prof) return signOut('บัญชีนี้ยังไม่ได้รับสิทธิ์ หรือถูกปิดแล้ว ติดต่อผู้ดูแล');
       state.me = { uid: user.uid, username: prof.username, name: prof.name, isAdmin: isAdmin };
       setAuthUI('in');
       startData();
       route();
-    }).catch(function () { signOut('เชื่อมต่อฐานข้อมูลไม่ได้ ลองใหม่อีกครั้ง'); });
+    }).catch(function (e) {
+      // อ่านโปรไฟล์ตัวเองไม่ได้ = ยังไม่มีโปรไฟล์ หรือบัญชีถูกปิดแล้ว
+      var denied = e && /permission/i.test(String(e.code || '') + ' ' + String(e.message || ''));
+      signOut(denied ? 'บัญชีนี้ยังไม่ได้รับสิทธิ์ หรือถูกปิดแล้ว ติดต่อผู้ดูแล' : 'เชื่อมต่อฐานข้อมูลไม่ได้ ลองใหม่อีกครั้ง');
+    });
   }
 
   function startData() {
@@ -1825,7 +1929,7 @@
       if (!state.me) return;
       if (!s.exists()) { signOut('บัญชีนี้ถูกปิดแล้ว'); return; }
       var p = s.val(); state.me.name = p.name; setAuthUI('in');
-    });
+    }, function () { if (state.me) signOut('บัญชีนี้ถูกปิดแล้ว'); });
     listen(ROOT + '/users', function (s) { state.db.users = s.val() || {}; render(); });
     startTrips();
   }
@@ -1912,7 +2016,7 @@
       firebase.initializeApp(cfg); fdb = firebase.database(); fauth = firebase.auth();
       // ทดสอบกับ Firebase จำลองบนเครื่อง: เปิด http://127.0.0.1:<port>/?emu=1
       if (/[?&]emu=1\b/.test(location.search) && /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
-        fauth.useEmulator('http://127.0.0.1:9099'); fdb.useEmulator('127.0.0.1', 9000);
+        fauth.useEmulator('http://127.0.0.1:9099'); fdb.useEmulator('127.0.0.1', 9000); EMU = true;
       }
     } catch (e) { setAuthUI('out'); showLoginError('เปิดระบบไม่สำเร็จ ลองรีเฟรชหน้า'); return; }
     setAuthUI('wait');

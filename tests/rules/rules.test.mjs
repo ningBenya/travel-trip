@@ -136,3 +136,25 @@ test('existing validation still applies', async () => {
   await assertSucceeds(upd(as.alice, { 'thumbs/p2': 'data:image/jpeg;base64,BB' }));
   await assertSucceeds(get(as.bob, 'thumbs/p1'));
 });
+
+test('admin replaces an account: new profile and trip membership in one update', async () => {
+  await assertSucceeds(upd(as.admin, {
+    'users/alice2': { username: 'alice', name: 'Alice', createdAt: 9 },
+    'usernames/alice': 'alice2',
+    'users/alice': null,
+    'trips/t1/ownerId': 'alice2',
+    'trips/t1/members/alice': null,
+    'trips/t1/members/alice2': true,
+    'userTrips/alice': null,
+    'userTrips/alice2/t1': true
+  }));
+});
+
+test('admin deactivates a user and takes over their trips', async () => {
+  await assertSucceeds(upd(as.admin, { 'users/adminUid': { username: 'hwangning', name: 'hwangning', createdAt: 3 } }));
+  await assertSucceeds(upd(as.admin, {
+    'users/alice': null, 'usernames/alice': null, 'userTrips/alice': null,
+    'trips/t1/members/alice': null, 'trips/t1/ownerId': 'adminUid', 'trips/t1/members/adminUid': true, 'userTrips/adminUid/t1': true
+  }));
+  await assertFails(get(as.alice, 'trips/t1'));
+});
