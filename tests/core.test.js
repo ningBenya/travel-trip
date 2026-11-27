@@ -98,3 +98,17 @@ test('passwordProblem', () => {
   assert.equal(C.passwordProblem('oldpass12', 'newpass123', 'newpass123'), '');
   assert.equal(C.passwordProblem(null, 'newpass123', 'newpass123'), '');
 });
+
+test('mergeHolidays: admin edits rename, add and hide built-in days', () => {
+  const file = { '2026-01-01': 'วันขึ้นปีใหม่', '2026-04-13': 'วันสงกรานต์' };
+  const db = {
+    '2026-04-13': { name: 'สงกรานต์ (แก้)' },
+    '2026-01-01': { off: true },
+    '2026-11-30': { name: 'วันหยุดพิเศษ' },
+    'bad-key': { name: 'x' },
+    '2026-02-02': { name: '' }
+  };
+  assert.deepEqual(C.mergeHolidays(file, db), { '2026-04-13': 'สงกรานต์ (แก้)', '2026-11-30': 'วันหยุดพิเศษ' });
+  assert.deepEqual(C.mergeHolidays(file, null), file);
+  assert.deepEqual(C.mergeHolidays(null, null), {});
+});

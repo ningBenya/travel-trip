@@ -85,7 +85,20 @@
     };
   }
 
+  // วันหยุดจากไฟล์ (holidays.js) + ที่ admin แก้ในเว็บ: { name } = เพิ่ม/เปลี่ยนชื่อ · { off: true } = ซ่อนวันจากไฟล์
+  function mergeHolidays(file, db) {
+    var out = {}, k;
+    for (k in (file || {})) if (parseIso(k) != null && file[k]) out[k] = String(file[k]);
+    for (k in (db || {})) {
+      if (parseIso(k) == null || !db[k]) continue;
+      if (db[k].off) delete out[k];
+      else if (db[k].name) out[k] = String(db[k].name);
+    }
+    return out;
+  }
+
   var api = {
+    mergeHolidays: mergeHolidays,
     ADMIN_EMAIL: ADMIN_EMAIL, normalizeUsername: normalizeUsername, validUsername: validUsername,
     usernameToEmail: usernameToEmail, emailToUsername: emailToUsername, isAdminEmail: isAdminEmail,
     authErrorText: authErrorText, passwordProblem: passwordProblem, layoutMonth: layoutMonth

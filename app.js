@@ -109,7 +109,7 @@
 
   /* ===== สถานะ ===== */
   var state = {
-    db: { trips: {}, items: {}, users: {} },
+    db: { trips: {}, items: {}, users: {}, holidays: {} },
     me: null,             // { uid, username, name, isAdmin } หลัง login
     loaded: false,
     selectedId: null,
@@ -958,6 +958,7 @@
     if (r === 'calendar') renderCalendar(trips);
     if (r === 'account' && state.me) $('#pwWho').textContent = 'บัญชี @' + state.me.username;
     if (membersDialog.open && !trip) membersDialog.close(); else if (membersDialog.open) renderMembers();
+    renderHolidays();
     if (r === 'users') renderUsers();
     if (!trip) { if (r === 'trip') $('#topTitle').textContent = 'กำลังโหลด…'; hydrate(); return; }
     if (state.editingItemId && !(state.db.items[trip.id] || {})[state.editingItemId]) resetDraft();
@@ -1104,6 +1105,66 @@
       .then(function () { b.disabled = false; b.textContent = 'บันทึกรหัสผ่านใหม่'; });
   });
 
+  /* ===== วันหยุดราชการ ===== */
+  var holDialog = $('#holDialog');
+  function holidays() { return TripCore.mergeHolidays(window.TH_HOLIDAYS || {}, state.db.holidays || {}); }
+  function canEditHolidays() { return !!(fdb && state.me && state.me.isAdmin); }
+  function openHolidays() {
+    if (!canEditHolidays()) return;
+    resetHolForm();
+    if (typeof holDialog.showModal === 'function') holDialog.showModal(); else holDialog.setAttribute('open', '');
+    renderHolidays();
+  }
+  function resetHolForm() {
+    var f = $('#holForm'); f.reset(); setField(f.date, ''); $('#holError').hidden = true;
+    $('#holSubmit').textContent = 'เพิ่มวันหยุด';
+  }
+  function renderHolidays() {
+    if (!holDialog.open) return;
+    var cm = calMonth(), mKey = cm.y + '-' + pad(cm.m + 1), file = window.TH_HOLIDAYS || {}, db = state.db.holidays || {};
+    var title = new Date(cm.y, cm.m, 1).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+    $('#holMonth').textContent = 'วันหยุดเดือน' + title;
+    var keys = {};
+    Object.keys(file).concat(Object.keys(db)).forEach(function (k) { if (k.slice(0, 7) === mKey && isIsoDay(k)) keys[k] = 1; });
+    var rows = Object.keys(keys).sort().map(function (k) {
+      var o = db[k], hidden = !!(o && o.off), name = (o && o.name) || file[k] || '', added = !file[k];
+      var tag = hidden ? 'ซ่อนอยู่' : (added ? 'เพิ่มเอง' : (o && o.name ? 'แก้ชื่อแล้ว' : ''));
+      return '<li class="mem-row' + (hidden ? ' hol-off' : '') + '"><span class="mem-text"><b>' + esc(fmt(k, { weekday: 'short', day: 'numeric', month: 'short' })) + ' · ' + esc(name) + '</b>' +
+        (tag ? '<span class="muted small">' + tag + '</span>' : '') + '</span>' +
+        (hidden ? '<button type="button" class="btn-secondary small-btn" data-act="hol-reset" data-day="' + esc(k) + '">แสดงอีกครั้ง</button>'
+          : '<button type="button" class="btn-secondary small-btn" data-act="hol-edit" data-day="' + esc(k) + '">แก้ไข</button>' +
+            '<button type="button" class="btn-secondary small-btn" data-act="hol-remove" data-day="' + esc(k) + '">' + (added ? 'ลบ' : 'ซ่อน') + '</button>') +
+        '</li>';
+    });
+    $('#holList').innerHTML = rows.length ? rows.join('') : '<li class="muted small mem-empty">ไม่มีวันหยุดในเดือนนี้</li>';
+  }
+  function holSave(paths, msg) {
+    return fdb.ref(ROOT).update(paths).then(function () { toast(msg); }, function () { toast('บันทึกวันหยุดไม่สำเร็จ ลองใหม่อีกครั้ง'); });
+  }
+  $('#holForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target, err = $('#holError'), day = getField(f.date), name = f.name.value.trim();
+    var fail = function (m) { err.textContent = m; err.hidden = false; };
+    if (!isIsoDay(day)) return fail('ใส่วันที่แบบ วว/ดด/ปปปป เช่น 30/11/2026');
+    if (!name) return fail('ใส่ชื่อวันหยุด');
+    if (name.length > 100) return fail('ชื่อวันหยุดยาวเกิน 100 ตัวอักษร');
+    var u = {}; u['holidays/' + day] = { name: name };
+    holSave(u, 'บันทึกวันหยุดแล้ว').then(function () {
+      var d = toDate(day); state.calMonth = { y: d.getFullYear(), m: d.getMonth() };
+      resetHolForm(); render();
+    });
+  });
+  function holAction(act, day) {
+    if (!canEditHolidays() || !isIsoDay(day)) return;
+    var file = window.TH_HOLIDAYS || {}, u = {};
+    if (act === 'hol-edit') {
+      var f = $('#holForm'); setField(f.date, day); f.name.value = holidays()[day] || ''; f.name.focus();
+      $('#holSubmit').textContent = 'บันทึกชื่อใหม่'; return;
+    }
+    if (act === 'hol-remove') { u['holidays/' + day] = file[day] ? { off: true } : null; holSave(u, file[day] ? 'ซ่อนวันหยุดแล้ว' : 'ลบวันหยุดแล้ว'); }
+    if (act === 'hol-reset') { u['holidays/' + day] = null; holSave(u, 'แสดงวันหยุดอีกครั้งแล้ว'); }
+  }
+
   /* ===== สมาชิกทริป ===== */
   var membersDialog = $('#membersDialog');
   function userName(uid) { var u = state.db.users[uid]; return u ? (u.name || u.username) : 'ผู้ใช้ที่ถูกปิดบัญชี'; }
@@ -1188,13 +1249,11 @@
   }
   function renderCalendar(trips) {
     var box = $('#calendarView'), cm = calMonth(), today = isoDate(new Date());
-    if (state.loaded && !trips.length) {
-      box.innerHTML = '<section class="empty-app card"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#9AA1AC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18v13H3zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/></svg>' +
-        '<h1>ยังไม่มีทริป</h1><p class="muted">สร้างทริปแรก แล้วทริปจะขึ้นในปฏิทินตามวันไป–วันกลับ</p>' +
-        '<button type="button" class="btn-primary" data-act="new-trip">สร้างทริปแรก</button></section>';
-      return;
-    }
-    var L = TripCore.layoutMonth(trips, cm.y, cm.m), byId = {};
+    // ยังไม่มีทริป: แสดงปุ่มสร้างทริปแรก แต่ยังแสดงปฏิทิน (และวันหยุด) ตามปกติ
+    var emptyNote = state.loaded && !trips.length ? '<section class="card cal-empty"><div><b>ยังไม่มีทริป</b>' +
+      '<span class="muted small">สร้างทริปแรก แล้วทริปจะขึ้นในปฏิทินตามวันไป–วันกลับ</span></div>' +
+      '<button type="button" class="btn-primary" data-act="new-trip">สร้างทริปแรก</button></section>' : '';
+    var L = TripCore.layoutMonth(trips, cm.y, cm.m), byId = {}, H = holidays();
     trips.forEach(function (t) { byId[t.id] = t; });
     var mKey = cm.y + '-' + pad(cm.m + 1);
     var title = new Date(cm.y, cm.m, 1).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
@@ -1208,8 +1267,10 @@
       wd.map(function (d) { return '<span role="columnheader">' + d + '</span>'; }).join('') + '</div>' +
       L.weeks.map(function (w) {
         var cells = w.days.map(function (d, i) {
-          var out = d.slice(0, 7) !== mKey;
-          return '<span class="cal-day' + (out ? ' out' : '') + (d === today ? ' today' : '') + '" style="grid-column:' + (i + 1) + '" role="gridcell"><b>' + Number(d.slice(8)) + '</b></span>';
+          var out = d.slice(0, 7) !== mKey, hol = H[d];
+          return '<span class="cal-day' + (out ? ' out' : '') + (d === today ? ' today' : '') + (hol ? ' hol' : '') + (i > 4 ? ' wknd' : '') + '" style="grid-column:' + (i + 1) + '" role="gridcell"' +
+            (hol ? ' title="' + esc(hol) + '" aria-label="' + esc(Number(d.slice(8)) + ' ' + hol) + '"' : '') + '><b>' + Number(d.slice(8)) + '</b>' +
+            (hol ? '<span class="cal-hol" aria-hidden="true">' + esc(hol) + '</span>' : '') + '</span>';
         }).join('');
         var bars = w.bars.map(function (b) {
           var t = byId[b.tripId];
@@ -1231,10 +1292,16 @@
         '<b class="num">' + money(tripTotal(t.id)) + '</b></button></li>';
     };
     var undated = L.undated.map(function (id) { return byId[id]; }).filter(Boolean);
+    var hols = Object.keys(H).filter(function (k) { return k.slice(0, 7) === mKey; }).sort();
+    var holBox = (hols.length || canEditHolidays()) ? '<section class="card cal-list hol-list"><div class="hol-head"><h2>วันหยุดราชการเดือนนี้</h2>' +
+      (canEditHolidays() ? '<button type="button" class="btn-secondary small-btn" data-act="open-hol">แก้ไขวันหยุด</button>' : '') + '</div>' +
+      (hols.length ? '<ul>' + hols.map(function (k) {
+        return '<li class="hol-row"><span class="hol-date num">' + esc(fmt(k, { weekday: 'short', day: 'numeric', month: 'short' })) + '</span><span>' + esc(H[k]) + '</span></li>';
+      }).join('') + '</ul>' : '<p class="muted small">ไม่มีวันหยุดราชการในเดือนนี้</p>') + '</section>' : '';
     var lists = '<section class="card cal-list"><h2>ทริปเดือนนี้</h2>' +
       (inMonth.length ? '<ul>' + inMonth.map(row).join('') + '</ul>' : '<p class="muted small">ไม่มีทริปในเดือนนี้</p>') + '</section>' +
       (undated.length ? '<section class="card cal-list"><h2>ยังไม่ระบุวัน</h2><ul>' + undated.map(row).join('') + '</ul></section>' : '');
-    box.innerHTML = head + grid + lists;
+    box.innerHTML = head + emptyNote + grid + (trips.length ? lists : '') + holBox;
   }
 
   function renderTripList(trips) {
@@ -1773,6 +1840,9 @@
         state.calMonth = { y: nm.getFullYear(), m: nm.getMonth() }; render(); break;
       case 'cal-today': state.calMonth = null; render(); break;
       case 'open-members': openMembers(); break;
+      case 'open-hol': openHolidays(); break;
+      case 'close-hol': holDialog.close(); break;
+      case 'hol-edit': case 'hol-remove': case 'hol-reset': holAction(act, el.dataset.day); break;
       case 'close-members': membersDialog.close(); break;
       case 'add-member': addMember(currentTrip(), el.dataset.uid); break;
       case 'remove-member': removeMember(currentTrip(), el.dataset.uid); break;
@@ -1947,6 +2017,7 @@
       var p = s.val(); state.me.name = p.name; setAuthUI('in');
     }, function () { if (state.me) signOut('บัญชีนี้ถูกปิดแล้ว'); });
     listen(ROOT + '/users', function (s) { state.db.users = s.val() || {}; render(); });
+    listen(ROOT + '/holidays', function (s) { state.db.holidays = s.val() || {}; render(); });
     startTrips();
   }
 
@@ -2029,7 +2100,7 @@
   function signOut(msg) {
     unlistenAll();
     try { closeOverlays(); [tripDialog, aiDialog, dayDialog, editDialog, cfDialog, lb].forEach(function (d) { if (d.open) d.close(); }); } catch (e) {}
-    state.db = { trips: {}, items: {}, users: {} };
+    state.db = { trips: {}, items: {}, users: {}, holidays: {} };
     state.selectedId = null; state.loaded = false; state.dayKey = null;
     blobCache.clear();
     var done = function () { showLogin(msg); resetDraft(); render(); };

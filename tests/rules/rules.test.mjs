@@ -212,3 +212,15 @@ test('photos: only members of the owning trip can overwrite or delete', async ()
   await assertFails(upd(as.mallory, { 'thumbs/pm': 'data:image/jpeg;base64,AA', 'photoTrip/pm': 't9' }));
   await assertSucceeds(get(as.bob, 'thumbs/p1'));
 });
+
+test('holidays: everyone signed in reads, only admin edits', async () => {
+  await assertSucceeds(upd(as.admin, { 'holidays/2026-11-30': { name: 'วันหยุดพิเศษ' }, 'holidays/2026-01-01': { off: true } }));
+  await assertSucceeds(get(as.bob, 'holidays'));
+  await assertFails(get(as.anon, 'holidays'));
+  await assertFails(get(as.mallory, 'holidays'));
+  await assertFails(upd(as.alice, { 'holidays/2026-12-01': { name: 'x' } }));
+  await assertFails(upd(as.admin, { 'holidays/not-a-date': { name: 'x' } }));
+  await assertFails(upd(as.admin, { 'holidays/2026-12-02': { name: '<img src=x>'.repeat(30) } }));
+  await assertFails(upd(as.admin, { 'holidays/2026-12-03': { name: 5 } }));
+  await assertSucceeds(upd(as.admin, { 'holidays/2026-11-30': null }));
+});

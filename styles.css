@@ -779,3 +779,28 @@ body:not([data-auth="in"]):not([data-auth="local"]) .fab{display:none!important}
 .page-lead{margin:0}
 .page-card .btn-primary{align-self:flex-start}
 @media (max-width:760px){.page-title{font-size:22px}.page-card .btn-primary{align-self:stretch}}
+
+/* ===== วันหยุดราชการ ===== */
+.cal-day{display:flex;align-items:flex-start;gap:4px;min-width:0}
+.cal-day.hol{background:#FDF1EF}
+.cal-day.hol b{color:#B3261E}
+.cal-day.today.hol b{background:#B3261E;color:#fff}
+.cal-hol{flex:1 1 auto;min-width:0;padding-top:4px;font-size:11px;line-height:1.25;color:#9A2A20;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hol-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.hol-head h2{margin:0}
+.hol-list ul{gap:0}
+.hol-row{display:flex;gap:12px;align-items:baseline;padding:8px 6px;border-top:1px solid var(--line-soft);font-size:14px}
+.hol-row:first-child{border-top:none}
+.hol-date{flex:0 0 7.5em;color:#B3261E;font-weight:600}
+.hol-month{font-size:15px;margin:4px 0 0}
+.hol-off .mem-text b{color:var(--muted);text-decoration:line-through}
+#holList .mem-row{gap:8px}
+#holList .small-btn{flex:0 0 auto}
+@media (max-width:760px){
+  .cal-hol{display:none}
+  .cal-day{justify-content:center}
+  .cal-day.hol{background:none}
+  .cal-day.hol b{background:#FBE3DF}
+}
+.cal-empty{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px}
+.cal-empty div{display:flex;flex-direction:column;gap:2px}
