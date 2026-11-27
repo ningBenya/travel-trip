@@ -112,3 +112,17 @@ test('mergeHolidays: admin edits rename, add and hide built-in days', () => {
   assert.deepEqual(C.mergeHolidays(file, null), file);
   assert.deepEqual(C.mergeHolidays(null, null), {});
 });
+
+test('layoutMonth with Sunday-first weeks', () => {
+  const m = C.layoutMonth([T('a', '2026-12-10', '2026-12-12'), T('b', '2026-12-12', '2026-12-15')], 2026, 11, 0);
+  assert.equal(m.weeks.length, 5);
+  assert.equal(m.weeks[0].days[0], '2026-11-29');
+  assert.equal(m.weeks[4].days[6], '2027-01-02');
+  const a = barsOf(m, 'a');
+  assert.deepEqual([a[0].week, a[0].col, a[0].span, a[0].startsHere, a[0].endsHere], [1, 4, 3, true, true]);
+  const b = barsOf(m, 'b');
+  assert.equal(b.length, 2);
+  assert.deepEqual([b[0].week, b[0].col, b[0].span, b[0].endsHere], [1, 6, 1, false]);
+  assert.deepEqual([b[1].week, b[1].col, b[1].span, b[1].startsHere], [2, 0, 3, false]);
+  assert.equal(b[0].lane, 1);
+});

@@ -811,3 +811,6 @@ body:not([data-auth="in"]):not([data-auth="local"]) .fab{display:none!important}
 }
 .cal-empty{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px}
 .cal-empty div{display:flex;flex-direction:column;gap:2px}
+.cal-wd span:first-child{color:#B3261E}
+.cal-day.wknd:not(.out):not(.hol):not(.today) b{color:#4B5563}
+.cal-day:first-child.wknd:not(.out):not(.hol):not(.today) b{color:#B3261E}

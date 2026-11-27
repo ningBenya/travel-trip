@@ -41,11 +41,13 @@
   }
   function iso(t) { return new Date(t).toISOString().slice(0, 10); }
 
-  // ตารางเดือนแบบจันทร์–อาทิตย์ และวางแถบทริปเป็นชั้น (lane) ไม่ให้ทับกัน
-  function layoutMonth(trips, year, month0) {
+  // ตารางเดือน และวางแถบทริปเป็นชั้น (lane) ไม่ให้ทับกัน
+  // weekStart: 0 = เริ่มวันอาทิตย์, 1 = เริ่มวันจันทร์ (ค่าเริ่มต้น)
+  function layoutMonth(trips, year, month0, weekStart) {
+    var ws = weekStart === 0 ? 0 : 1;
     var first = Date.UTC(year, month0, 1), last = Date.UTC(year, month0 + 1, 0);
-    var gridStart = first - ((new Date(first).getUTCDay() + 6) % 7) * DAY;
-    var gridEnd = last + (6 - (new Date(last).getUTCDay() + 6) % 7) * DAY;
+    var gridStart = first - ((new Date(first).getUTCDay() - ws + 7) % 7) * DAY;
+    var gridEnd = last + (6 - (new Date(last).getUTCDay() - ws + 7) % 7) * DAY;
     var weeks = [], undated = [];
     for (var w = gridStart; w <= gridEnd; w += 7 * DAY) {
       var days = [];

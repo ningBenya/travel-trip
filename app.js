@@ -1255,22 +1255,23 @@
     var emptyNote = state.loaded && !trips.length ? '<section class="card cal-empty"><div><b>ยังไม่มีทริป</b>' +
       '<span class="muted small">สร้างทริปแรก แล้วทริปจะขึ้นในปฏิทินตามวันไป–วันกลับ</span></div>' +
       '<button type="button" class="btn-primary" data-act="new-trip">สร้างทริปแรก</button></section>' : '';
-    var L = TripCore.layoutMonth(trips, cm.y, cm.m), byId = {}, H = holidays();
+    var L = TripCore.layoutMonth(trips, cm.y, cm.m, 0), byId = {}, H = holidays();
     trips.forEach(function (t) { byId[t.id] = t; });
     var mKey = cm.y + '-' + pad(cm.m + 1);
-    var title = new Date(cm.y, cm.m, 1).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+    // ตารางปฏิทินใช้ภาษาอังกฤษ และเริ่มสัปดาห์วันอาทิตย์
+    var title = new Date(cm.y, cm.m, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     var head = '<div class="cal-head"><h1>ปฏิทินทริป</h1>' +
-      '<div class="cal-nav"><button type="button" class="icon-btn outline" data-act="cal-step" data-dir="-1" aria-label="เดือนก่อนหน้า">' + ICON.chevL + '</button>' +
+      '<div class="cal-nav"><button type="button" class="icon-btn outline" data-act="cal-step" data-dir="-1" aria-label="Previous month">' + ICON.chevL + '</button>' +
       '<h2 class="cal-title" aria-live="polite">' + esc(title) + '</h2>' +
-      '<button type="button" class="icon-btn outline" data-act="cal-step" data-dir="1" aria-label="เดือนถัดไป">' + ICON.chevR + '</button>' +
-      '<button type="button" class="btn-secondary small-btn" data-act="cal-today">วันนี้</button></div></div>';
-    var wd = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
-    var grid = '<div class="cal card" role="grid" aria-label="' + esc('ปฏิทิน ' + title) + '"><div class="cal-wd" role="row">' +
+      '<button type="button" class="icon-btn outline" data-act="cal-step" data-dir="1" aria-label="Next month">' + ICON.chevR + '</button>' +
+      '<button type="button" class="btn-secondary small-btn" data-act="cal-today">Today</button></div></div>';
+    var wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    var grid = '<div class="cal card" role="grid" aria-label="' + esc('Calendar ' + title) + '"><div class="cal-wd" role="row">' +
       wd.map(function (d) { return '<span role="columnheader">' + d + '</span>'; }).join('') + '</div>' +
       L.weeks.map(function (w) {
         var cells = w.days.map(function (d, i) {
           var out = d.slice(0, 7) !== mKey, hol = H[d];
-          return '<span class="cal-day' + (out ? ' out' : '') + (d === today ? ' today' : '') + (hol ? ' hol' : '') + (i > 4 ? ' wknd' : '') + '" style="grid-column:' + (i + 1) + '" role="gridcell"' +
+          return '<span class="cal-day' + (out ? ' out' : '') + (d === today ? ' today' : '') + (hol ? ' hol' : '') + (i === 0 || i === 6 ? ' wknd' : '') + '" style="grid-column:' + (i + 1) + '" role="gridcell"' +
             (hol ? ' title="' + esc(hol) + '" aria-label="' + esc(Number(d.slice(8)) + ' ' + hol) + '"' : '') + '><b>' + Number(d.slice(8)) + '</b>' +
             (hol ? '<span class="cal-hol" aria-hidden="true">' + esc(hol) + '</span>' : '') + '</span>';
         }).join('');
