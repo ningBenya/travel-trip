@@ -1245,7 +1245,9 @@
   function tripRange(t) {
     if (!isIsoDay(t.start)) return 'ยังไม่ระบุวัน';
     var e = isIsoDay(t.end) && t.end >= t.start ? t.end : t.start;
-    return e === t.start ? fmtLong(t.start) : fmtShort(t.start) + ' – ' + fmtLong(e);
+    if (e === t.start) return fmtLong(t.start);
+    // ข้ามปี (เช่น 28 ธ.ค. 2569 – 2 ม.ค. 2570) ใส่ปีทั้งสองฝั่ง
+    return (e.slice(0, 4) === t.start.slice(0, 4) ? fmtShort(t.start) : fmtLong(t.start)) + ' – ' + fmtLong(e);
   }
   function renderCalendar(trips) {
     var box = $('#calendarView'), cm = calMonth(), today = isoDate(new Date());
@@ -1311,7 +1313,7 @@
         '<div class="trip-strip" style="background:' + themeColor(t.theme) + '">' +
         (t.coverId ? '<img data-thumb="' + esc(t.coverId) + '" alt="">' : '') + '</div>' +
         '<span class="t-name">' + esc(t.name) + '</span>' +
-        '<span class="t-sub">' + esc(t.destination || 'ยังไม่ระบุจุดหมาย') + (t.start ? ' · ' + fmtShort(t.start) + ' – ' + fmtShort(t.end || t.start) : '') + '</span>' +
+        '<span class="t-sub">' + esc(t.destination || 'ยังไม่ระบุจุดหมาย') + (isIsoDay(t.start) ? ' · ' + tripRange(t) : '') + '</span>' +
         '<span class="t-foot"><span class="muted small">' + items.length + ' รายการ · ' + dayCount(t) + ' วัน</span><b>' + money(tripTotal(t.id)) + '</b></span>' +
         '</button>';
     }).join('');
@@ -1712,7 +1714,7 @@
     askConfirm({
       title: 'ลบทริปนี้?',
       html: '<div class="cf-item cf-trip"><span class="cf-cover" style="background:' + themeColor(t.theme) + '">' + (t.coverId ? '<img data-thumb="' + esc(t.coverId) + '" alt="">' : '') + '</span>' +
-        '<span class="cf-item-text"><b>' + esc(t.name) + '</b><span>' + esc(t.destination || '') + (t.start ? ' · ' + fmtShort(t.start) + ' – ' + fmtShort(t.end || t.start) : '') + '</span>' +
+        '<span class="cf-item-text"><b>' + esc(t.name) + '</b><span>' + esc(t.destination || '') + (isIsoDay(t.start) ? ' · ' + tripRange(t) : '') + '</span>' +
         '<span>' + items.length + ' รายการ · ' + money(tripTotal(t.id)) + '</span></span></div>',
       note: 'รายการ รูป และแผนรายวันทั้งหมดของทริปนี้จะถูกลบ · กด “เลิกทำ” ได้ภายใน 8 วินาทีหลังลบ',
       okLabel: 'ลบทริป'
